@@ -1,0 +1,762 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Getwiki - Wiki libre para todos</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script src="https://unpkg.com/lucide@latest"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/showdown/2.1.0/showdown.min.js"></script>
+  <!-- Versión incorrecta (cambia @2.49.1 a @2.39.8 que es más estable) -->
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.39.8/dist/umd/supabase.min.js"></script>
+  
+  <style>
+    @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap');
+    
+    body {
+      font-family: 'Inter', sans-serif;
+    }
+
+    .wiki-content h1 {
+      font-size: 1.8rem;
+      font-weight: 700;
+      margin-top: 1rem;
+      margin-bottom: 0.5rem;
+    }
+
+    .wiki-content h2 {
+      font-size: 1.5rem;
+      font-weight: 600;
+      margin-top: 1rem;
+      margin-bottom: 0.5rem;
+    }
+
+    .wiki-content h3 {
+      font-size: 1.25rem;
+      font-weight: 600;
+      margin-top: 1rem;
+      margin-bottom: 0.5rem;
+    }
+
+    .wiki-content p {
+      margin-bottom: 0.75rem;
+      line-height: 1.6;
+    }
+
+    .wiki-content ul, .wiki-content ol {
+      padding-left: 1.5rem;
+      margin-bottom: 0.75rem;
+    }
+
+    .wiki-content ul {
+      list-style-type: disc;
+    }
+
+    .wiki-content ol {
+      list-style-type: decimal;
+    }
+
+    .wiki-content a {
+      color: #1d4ed8;
+      text-decoration: none;
+    }
+
+    .wiki-content a:hover {
+      text-decoration: underline;
+    }
+
+    .wiki-content code {
+      background-color: #f1f5f9;
+      padding: 0.1rem 0.3rem;
+      border-radius: 0.25rem;
+      font-family: monospace;
+    }
+
+    .wiki-content blockquote {
+      border-left: 4px solid #e2e8f0;
+      padding-left: 1rem;
+      margin-left: 0;
+      color: #4b5563;
+    }
+
+    .wiki-editor textarea {
+      min-height: 300px;
+    }
+
+    .toolbar-button {
+      padding: 0.25rem 0.5rem;
+      background-color: #f8fafc;
+      border: 1px solid #e2e8f0;
+      border-radius: 0.25rem;
+      margin-right: 0.25rem;
+      cursor: pointer;
+    }
+
+    .toolbar-button:hover {
+      background-color: #f1f5f9;
+    }
+
+    /* Animaciones */
+    .slide-up {
+      animation: slideUp 0.3s ease forwards;
+    }
+
+    @keyframes slideUp {
+      from {
+        transform: translateY(100%);
+        opacity: 0;
+      }
+      to {
+        transform: translateY(0);
+        opacity: 1;
+      }
+    }
+  </style>
+</head>
+<body class="bg-gray-50 text-gray-900">
+  <div id="app" class="max-w-xl mx-auto bg-white min-h-screen flex flex-col relative">
+    <!-- Header -->
+    <header class="sticky top-0 z-10 bg-white border-b border-gray-200 shadow-sm">
+      <div class="flex items-center justify-between px-4 py-3">
+        <div class="flex items-center">
+          <h1 class="text-2xl font-bold text-blue-600">Getwiki</h1>
+        </div>
+        <div class="flex items-center">
+          <button id="searchToggle" class="p-2 text-gray-600 hover:text-blue-600">
+            <i data-lucide="search" class="w-5 h-5"></i>
+          </button>
+        </div>
+      </div>
+      
+      <!-- Barra de búsqueda (inicialmente oculta) -->
+      <div id="searchBar" class="hidden px-4 py-2 border-t border-gray-200">
+        <div class="relative">
+          <input type="text" id="searchInput" placeholder="Buscar wiki..." class="w-full py-2 pl-10 pr-4 border border-gray-300 rounded-lg focus:outline-none focus:border-blue-500">
+          <i data-lucide="search" class="absolute left-3 top-1/2 transform -translate-y-1/2 w-5 h-5 text-gray-400"></i>
+        </div>
+        <div id="searchResults" class="mt-2"></div>
+      </div>
+    </header>
+
+    <!-- Contenido principal -->
+    <main class="flex-1 px-4 py-6 overflow-auto">
+      <!-- Vista inicial / Lista de wikis -->
+      <div id="wikiList" class="space-y-4">
+        <div class="text-center py-6">
+          <i data-lucide="book-open" class="w-16 h-16 mx-auto text-blue-500 mb-4"></i>
+          <h2 class="text-xl font-semibold mb-2">Bienvenido a Getwiki</h2>
+          <p class="text-gray-600 mb-4">La wiki libre donde puedes crear y compartir conocimiento sobre cualquier tema.</p>
+          <p class="text-sm text-gray-500">Comienza creando tu primera página wiki o explora el contenido existente.</p>
+        </div>
+        <div id="featuredWikis" class="space-y-3">
+          <h3 class="text-lg font-semibold text-gray-700">Páginas destacadas</h3>
+          <!-- Las páginas se cargarán dinámicamente desde Supabase -->
+          <div class="animate-pulse space-y-3">
+            <div class="h-16 bg-gray-200 rounded"></div>
+            <div class="h-16 bg-gray-200 rounded"></div>
+            <div class="h-16 bg-gray-200 rounded"></div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Vista de una wiki específica (inicialmente oculta) -->
+      <div id="wikiView" class="hidden">
+        <div class="mb-4 flex items-center">
+          <button id="backToList" class="p-1 mr-2 text-gray-600 hover:text-blue-600">
+            <i data-lucide="arrow-left" class="w-5 h-5"></i>
+          </button>
+          <h2 id="wikiTitle" class="text-xl font-bold"></h2>
+        </div>
+        <div id="wikiContent" class="wiki-content prose max-w-none"></div>
+      </div>
+
+      <!-- Editor de wiki (inicialmente oculto) -->
+      <div id="wikiEditor" class="hidden wiki-editor">
+        <div class="mb-4 flex items-center">
+          <button id="cancelEdit" class="p-1 mr-2 text-gray-600 hover:text-blue-600">
+            <i data-lucide="x" class="w-5 h-5"></i>
+          </button>
+          <h2 class="text-xl font-bold">Editar Wiki</h2>
+        </div>
+        <div class="mb-4">
+          <label for="editTitle" class="block text-sm font-medium text-gray-700 mb-1">Título</label>
+          <input type="text" id="editTitle" class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:border-blue-500" placeholder="Título de la wiki">
+        </div>
+        <div class="mb-2">
+          <label class="block text-sm font-medium text-gray-700 mb-1">Contenido</label>
+          <div class="border border-gray-300 rounded-lg overflow-hidden">
+            <div class="flex flex-wrap bg-gray-100 p-1 border-b border-gray-300">
+              <button class="toolbar-button" data-wiki="## "><i data-lucide="heading-2" class="w-4 h-4"></i></button>
+              <button class="toolbar-button" data-wiki="### "><i data-lucide="heading-3" class="w-4 h-4"></i></button>
+              <button class="toolbar-button" data-wiki="**texto**"><i data-lucide="bold" class="w-4 h-4"></i></button>
+              <button class="toolbar-button" data-wiki="*texto*"><i data-lucide="italic" class="w-4 h-4"></i></button>
+              <button class="toolbar-button" data-wiki="- "><i data-lucide="list" class="w-4 h-4"></i></button>
+              <button class="toolbar-button" data-wiki="1. "><i data-lucide="list-ordered" class="w-4 h-4"></i></button>
+              <button class="toolbar-button" data-wiki="[texto](url)"><i data-lucide="link" class="w-4 h-4"></i></button>
+              <button class="toolbar-button" data-wiki="> "><i data-lucide="quote" class="w-4 h-4"></i></button>
+              <button class="toolbar-button" data-wiki="```\ncódigo\n```"><i data-lucide="code" class="w-4 h-4"></i></button>
+            </div>
+            <textarea id="editContent" class="w-full px-3 py-2 focus:outline-none" placeholder="Escribe aquí el contenido de la wiki usando formato markdown"></textarea>
+          </div>
+        </div>
+        <div class="flex justify-between items-center">
+          <div class="text-xs text-gray-500">
+            <a href="#" id="markdownHelp" class="hover:underline">Ayuda con markdown</a>
+          </div>
+          <div>
+            <button id="previewButton" class="px-4 py-2 text-sm font-medium text-blue-600 hover:text-blue-800">Vista previa</button>
+            <button id="saveWiki" class="px-4 py-2 text-sm font-medium text-white bg-blue-600 rounded-lg hover:bg-blue-700">Guardar</button>
+          </div>
+        </div>
+      </div>
+
+      <!-- Vista previa (inicialmente oculta) -->
+      <div id="previewView" class="hidden">
+        <div class="mb-4 flex items-center">
+          <button id="backToEdit" class="p-1 mr-2 text-gray-600 hover:text-blue-600">
+            <i data-lucide="arrow-left" class="w-5 h-5"></i>
+          </button>
+          <h2 class="text-xl font-bold">Vista Previa</h2>
+        </div>
+        <h3 id="previewTitle" class="text-2xl font-bold mb-4"></h3>
+        <div id="previewContent" class="wiki-content prose max-w-none"></div>
+      </div>
+    </main>
+
+    <!-- Botón flotante para nueva wiki -->
+    <div class="fixed bottom-6 right-6 z-20" style="max-width: calc(576px - 3rem); margin-left: auto; margin-right: auto; left: 10; right: 0;">
+      <button id="newWikiBtn" class="flex items-center justify-center bg-blue-600 text-white w-14 h-14 rounded-full shadow-lg hover:bg-blue-700 focus:outline-none">
+        <i data-lucide="plus" class="w-6 h-6"></i>
+      </button>
+    </div>
+  </div>
+
+  <!-- Ayuda Markdown (modal oculto) -->
+  <div id="markdownModal" class="fixed inset-0 bg-black bg-opacity-50 z-50 flex items-end justify-center md:items-center hidden">
+    <div class="bg-white w-full max-w-xl rounded-t-lg md:rounded-lg shadow-xl slide-up max-h-[80vh] overflow-auto">
+      <div class="p-4 border-b border-gray-200 flex justify-between items-center">
+        <h3 class="text-lg font-semibold">Guía rápida de Markdown</h3>
+        <button id="closeMarkdownHelp" class="text-gray-500 hover:text-gray-700">
+          <i data-lucide="x" class="w-5 h-5"></i>
+        </button>
+      </div>
+      <div class="p-4 space-y-4">
+        <div>
+          <h4 class="font-medium mb-2">Encabezados</h4>
+          <div class="bg-gray-50 p-2 rounded">
+            <code># Encabezado 1</code><br>
+            <code>## Encabezado 2</code><br>
+            <code>### Encabezado 3</code>
+          </div>
+        </div>
+        <div>
+          <h4 class="font-medium mb-2">Formato de texto</h4>
+          <div class="bg-gray-50 p-2 rounded">
+            <code>**texto en negrita**</code><br>
+            <code>*texto en cursiva*</code><br>
+            <code>~~texto tachado~~</code>
+          </div>
+        </div>
+        <div>
+          <h4 class="font-medium mb-2">Listas</h4>
+          <div class="bg-gray-50 p-2 rounded">
+            <code>- Item de lista</code><br>
+            <code>1. Item numerado</code>
+          </div>
+        </div>
+        <div>
+          <h4 class="font-medium mb-2">Enlaces e imágenes</h4>
+          <div class="bg-gray-50 p-2 rounded">
+            <code>[texto del enlace](URL)</code><br>
+            <code>![texto alternativo](URL de la imagen)</code>
+          </div>
+        </div>
+        <div>
+          <h4 class="font-medium mb-2">Citas y código</h4>
+          <div class="bg-gray-50 p-2 rounded">
+            <code>> Esto es una cita</code><br>
+            <code>`código en línea`</code><br>
+            <code>```<br>bloque de código<br>```</code>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    // Inicializar iconos de Lucide
+    lucide.createIcons();
+    
+    // Inicializar Supabase
+    const supabaseUrl = 'https://vewrzvydwlldgkcpsxzn.supabase.co';
+    const supabaseKey = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InZld3J6dnlkd2xsZGdrY3BzeHpuIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NDIzNTg1MDcsImV4cCI6MjA1NzkzNDUwN30.iX2iyv9iMo7jDW-XlBHt-LZbMiLW7NCUI3u_HWvarBk';
+    // Agrega 'window.' antes de supabase
+const supabase = window.supabase.createClient(supabaseUrl, supabaseKey);
+    
+    // Inicializar el convertidor de Markdown
+    const converter = new showdown.Converter({
+      tables: true,
+      simplifiedAutoLink: true,
+      strikethrough: true,
+      tasklists: true
+    });
+    
+    // Referencias a elementos del DOM
+    const app = {
+      views: {
+        wikiList: document.getElementById('wikiList'),
+        wikiView: document.getElementById('wikiView'),
+        wikiEditor: document.getElementById('wikiEditor'),
+        previewView: document.getElementById('previewView'),
+        searchBar: document.getElementById('searchBar'),
+        markdownModal: document.getElementById('markdownModal')
+      },
+      elements: {
+        searchToggle: document.getElementById('searchToggle'),
+        searchInput: document.getElementById('searchInput'),
+        searchResults: document.getElementById('searchResults'),
+        backToList: document.getElementById('backToList'),
+        newWikiBtn: document.getElementById('newWikiBtn'),
+        wikiTitle: document.getElementById('wikiTitle'),
+        wikiContent: document.getElementById('wikiContent'),
+        editTitle: document.getElementById('editTitle'),
+        editContent: document.getElementById('editContent'),
+        cancelEdit: document.getElementById('cancelEdit'),
+        saveWiki: document.getElementById('saveWiki'),
+        previewButton: document.getElementById('previewButton'),
+        backToEdit: document.getElementById('backToEdit'),
+        previewTitle: document.getElementById('previewTitle'),
+        previewContent: document.getElementById('previewContent'),
+        featuredWikis: document.getElementById('featuredWikis'),
+        markdownHelp: document.getElementById('markdownHelp'),
+        closeMarkdownHelp: document.getElementById('closeMarkdownHelp')
+      },
+      state: {
+        currentWikiId: null,
+        isEditing: false,
+        isCreating: false
+      }
+    };
+    
+    // Funciones para cambiar de vista
+    function showView(viewName) {
+      Object.keys(app.views).forEach(key => {
+        app.views[key].classList.add('hidden');
+      });
+      app.views[viewName].classList.remove('hidden');
+    }
+    
+    // Cargar wikis desde Supabase
+    async function loadWikis() {
+  try {
+    // Mostrar estado de carga
+    app.elements.featuredWikis.innerHTML = `
+      <div class="animate-pulse space-y-3">
+        <div class="h-16 bg-gray-200 rounded"></div>
+        <div class="h-16 bg-gray-200 rounded"></div>
+        <div class="h-16 bg-gray-200 rounded"></div>
+      </div>
+    `;
+
+    // Obtener wikis de Supabase
+    const { data, error } = await supabase
+      .from('wikis')
+      .select('id, title, updated_at')
+      .order('updated_at', { ascending: false })
+      .limit(20);
+
+    // Manejar errores
+    if (error) {
+      if (error.code === '42P01') { // Tabla no existe
+        throw new Error('La tabla de wikis no existe en la base de datos');
+      }
+      throw error;
+    }
+
+    // Mostrar resultados
+    if (data.length === 0) {
+      app.elements.featuredWikis.innerHTML = `
+        <div class="text-center py-6">
+          <i data-lucide="book" class="w-16 h-16 mx-auto text-blue-500 mb-4"></i>
+          <p class="text-gray-600">¡No hay wikis todavía!</p>
+          <p class="text-sm text-gray-500 mt-2">Haz clic en el botón + para crear la primera</p>
+        </div>
+      `;
+      lucide.createIcons();
+      return;
+    }
+
+    // Construir lista
+    const wikiListHtml = data.map(wiki => `
+      <div class="wiki-item p-3 border border-gray-200 rounded-lg hover:bg-gray-50 cursor-pointer transition-colors" data-id="${wiki.id}">
+        <h3 class="font-medium text-gray-800">${escapeHtml(wiki.title)}</h3>
+        <p class="text-sm text-gray-500 mt-1">
+          <i data-lucide="clock" class="w-4 h-4 inline-block mr-1"></i>
+          ${new Date(wiki.updated_at).toLocaleDateString('es-ES', {
+            day: 'numeric',
+            month: 'long',
+            year: 'numeric'
+          })}
+        </p>
+      </div>
+    `).join('');
+
+    app.elements.featuredWikis.innerHTML = `
+      <h3 class="text-lg font-semibold text-gray-700 mb-4">Últimas páginas</h3>
+      <div class="space-y-3">${wikiListHtml}</div>
+    `;
+
+    // Agregar eventos a los items
+    document.querySelectorAll('.wiki-item').forEach(item => {
+      item.addEventListener('click', () => loadWiki(item.dataset.id));
+    });
+
+  } catch (error) {
+    console.error('Error cargando wikis:', error);
+    app.elements.featuredWikis.innerHTML = `
+      <div class="p-4 bg-red-50 text-red-700 rounded-lg border border-red-200">
+        <h3 class="font-medium">⚠️ Error al cargar las páginas</h3>
+        <p class="mt-2 text-sm">${error.message}</p>
+        ${error.code === '42P01' ? 
+          '<p class="mt-2 text-sm">Contacta al administrador para crear la tabla</p>' : 
+          '<p class="mt-2 text-sm">Intenta recargar la página</p>'}
+      </div>
+    `;
+  }
+}
+    
+    // Cargar una wiki específica
+    async function loadWiki(id) {
+      try {
+        const { data, error } = await supabase
+          .from('wikis')
+          .select('*')
+          .eq('id', id)
+          .single();
+          
+        if (error) throw error;
+        
+        app.state.currentWikiId = id;
+        app.elements.wikiTitle.textContent = data.title;
+        app.elements.wikiContent.innerHTML = converter.makeHtml(data.content);
+        
+        // Convertir enlaces internos
+        processInternalLinks();
+        
+        showView('wikiView');
+        
+      } catch (error) {
+        console.error('Error loading wiki:', error);
+        alert('Error al cargar la página wiki.');
+      }
+    }
+    
+    // Procesar enlaces internos [[pagina]]
+    function processInternalLinks() {
+      const wikiLinks = app.elements.wikiContent.querySelectorAll('a');
+      wikiLinks.forEach(link => {
+        if (link.textContent.startsWith('[[') && link.textContent.endsWith(']]')) {
+          const wikiName = link.textContent.substring(2, link.textContent.length - 2);
+          link.textContent = wikiName;
+          link.addEventListener('click', (e) => {
+            e.preventDefault();
+            searchAndLoadWiki(wikiName);
+          });
+        }
+      });
+    }
+    
+    // Buscar y cargar una wiki por nombre
+    async function searchAndLoadWiki(title) {
+      try {
+        const { data, error } = await supabase
+          .from('wikis')
+          .select('id')
+          .ilike('title', title)
+          .limit(1);
+          
+        if (error) throw error;
+        
+        if (data.length > 0) {
+          loadWiki(data[0].id);
+        } else {
+          // No existe la wiki, ofrecer crearla
+          if (confirm(`La página "${title}" no existe. ¿Quieres crearla?`)) {
+            createNewWiki(title);
+          }
+        }
+        
+      } catch (error) {
+        console.error('Error searching wiki:', error);
+      }
+    }
+    
+    // Crear nueva wiki
+    function createNewWiki(title = '') {
+      app.state.isCreating = true;
+      app.state.currentWikiId = null;
+      app.elements.editTitle.value = title;
+      app.elements.editContent.value = '';
+      showView('wikiEditor');
+    }
+    
+    // Editar wiki existente
+    function editWiki() {
+      app.state.isCreating = false;
+      app.elements.editTitle.value = app.elements.wikiTitle.textContent;
+      
+      // Obtener el contenido original de la wiki
+      (async () => {
+        try {
+          const { data, error } = await supabase
+            .from('wikis')
+            .select('content')
+            .eq('id', app.state.currentWikiId)
+            .single();
+            
+          if (error) throw error;
+          
+          app.elements.editContent.value = data.content;
+          showView('wikiEditor');
+          
+        } catch (error) {
+          console.error('Error getting wiki content:', error);
+          alert('Error al obtener el contenido para editar.');
+        }
+      })();
+    }
+    
+    // Guardar wiki
+    async function saveWiki() {
+  const title = app.elements.editTitle.value.trim();
+  const content = app.elements.editContent.value.trim();
+
+  // Validación de campos
+  if (!title) {
+    alert('❌ Por favor ingresa un título para la wiki');
+    app.elements.editTitle.focus();
+    return;
+  }
+  
+  if (!content) {
+    alert('❌ El contenido no puede estar vacío');
+    app.elements.editContent.focus();
+    return;
+  }
+
+  try {
+    let result;
+    const wikiData = {
+      title,
+      content,
+      updated_at: new Date().toISOString()
+    };
+
+    if (app.state.isCreating) {
+      // Crear nueva wiki
+      result = await supabase
+        .from('wikis')
+        .insert([wikiData])
+        .select('*');
+    } else {
+      // Actualizar wiki existente
+      result = await supabase
+        .from('wikis')
+        .update(wikiData)
+        .eq('id', app.state.currentWikiId)
+        .select('*');
+    }
+
+    // Manejo de errores de Supabase
+    if (result.error) {
+      const errorDetails = `
+        🚨 Error de Supabase:
+        Código: ${result.error.code || 'N/A'}
+        Mensaje: ${result.error.message}
+        Detalles: ${result.error.details || 'N/A'}
+      `;
+      throw new Error(errorDetails);
+    }
+
+    // Actualizar la UI
+    if (result.data.length > 0) {
+      app.state.currentWikiId = result.data[0].id;
+      alert('✅ Wiki guardada correctamente');
+      loadWiki(result.data[0].id); // Cargar la wiki actualizada
+      loadWikis(); // Actualizar la lista
+    }
+
+  } catch (error) {
+    console.error('Error completo al guardar:', error);
+    alert(`⚠️ Error al guardar: ${error.message}`);
+  }
+}
+    
+    // Buscar wikis
+    async function searchWikis(query) {
+      if (!query.trim()) {
+        app.elements.searchResults.innerHTML = '';
+        return;
+      }
+      
+      try {
+        const { data, error } = await supabase
+          .from('wikis')
+          .select('id, title')
+          .ilike('title', `%${query}%`)
+          .limit(10);
+          
+        if (error) throw error;
+        
+        if (data.length > 0) {
+          const resultsHtml = data.map(wiki => `
+            <div class="search-result p-2 hover:bg-gray-100 cursor-pointer" data-id="${wiki.id}">
+              <p class="font-medium">${highlightText(wiki.title, query)}</p>
+            </div>
+          `).join('');
+          
+          app.elements.searchResults.innerHTML = resultsHtml;
+          
+          // Agregar eventos a los resultados
+          document.querySelectorAll('.search-result').forEach(item => {
+            item.addEventListener('click', () => {
+              loadWiki(item.dataset.id);
+              toggleSearch();
+            });
+          });
+          
+        } else {
+          app.elements.searchResults.innerHTML = `
+            <p class="text-gray-500 p-2">No se encontraron resultados para "${escapeHtml(query)}".</p>
+            <button id="createFromSearch" class="w-full text-left p-2 text-blue-600 hover:bg-gray-100">
+              Crear página "${escapeHtml(query)}"
+            </button>
+          `;
+          
+          document.getElementById('createFromSearch').addEventListener('click', () => {
+            createNewWiki(query);
+            toggleSearch();
+          });
+        }
+        
+      } catch (error) {
+        console.error('Error searching:', error);
+        app.elements.searchResults.innerHTML = `
+          <p class="text-red-500 p-2">Error al buscar. Intenta de nuevo.</p>
+        `;
+      }
+    }
+    
+    // Funciones auxiliares
+    function toggleSearch() {
+      app.views.searchBar.classList.toggle('hidden');
+      if (!app.views.searchBar.classList.contains('hidden')) {
+        app.elements.searchInput.focus();
+      } else {
+        app.elements.searchInput.value = '';
+        app.elements.searchResults.innerHTML = '';
+      }
+    }
+    
+    function escapeHtml(text) {
+      const div = document.createElement('div');
+      div.textContent = text;
+      return div.innerHTML;
+    }
+    
+    function highlightText(text, query) {
+      const regex = new RegExp(`(${escapeRegExp(query)})`, 'gi');
+      return text.replace(regex, '<mark class="bg-yellow-200">$1</mark>');
+    }
+    
+    function escapeRegExp(string) {
+      return string.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+    }
+    
+    // Event Listeners
+    app.elements.searchToggle.addEventListener('click', toggleSearch);
+    
+    app.elements.searchInput.addEventListener('input', (e) => {
+      searchWikis(e.target.value);
+    });
+    
+    app.elements.backToList.addEventListener('click', () => {
+      showView('wikiList');
+      loadWikis(); // Recargar la lista para mostrar actualizaciones
+    });
+    
+    app.elements.newWikiBtn.addEventListener('click', () => {
+      createNewWiki();
+    });
+    
+    app.elements.cancelEdit.addEventListener('click', () => {
+      if (app.state.currentWikiId) {
+        showView('wikiView');
+      } else {
+        showView('wikiList');
+      }
+    });
+    
+    app.elements.saveWiki.addEventListener('click', saveWiki);
+    
+    app.elements.previewButton.addEventListener('click', () => {
+      app.elements.previewTitle.textContent = app.elements.editTitle.value || 'Sin título';
+      app.elements.previewContent.innerHTML = converter.makeHtml(app.elements.editContent.value);
+      showView('previewView');
+    });
+    
+    app.elements.backToEdit.addEventListener('click', () => {
+      showView('wikiEditor');
+    });
+    
+    // Botones de la barra de herramientas del editor
+    document.querySelectorAll('.toolbar-button').forEach(button => {
+      button.addEventListener('click', () => {
+        const textarea = app.elements.editContent;
+        const start = textarea.selectionStart;
+        const end = textarea.selectionEnd;
+        const selectedText = textarea.value.substring(start, end);
+        const wikiMarkup = button.dataset.wiki;
+        
+        let replacement;
+        
+        if (wikiMarkup.includes('texto')) {
+          replacement = wikiMarkup.replace('texto', selectedText || 'texto');
+        } else {
+          replacement = wikiMarkup + (selectedText || '');
+        }
+        
+        textarea.value = textarea.value.substring(0, start) + replacement + textarea.value.substring(end);
+        
+        // Reposicionar el cursor después de insertar el markup
+        textarea.focus();
+        const newPosition = start + replacement.length;
+        textarea.setSelectionRange(newPosition, newPosition);
+      });
+    });
+    
+    // Modal de ayuda markdown
+    app.elements.markdownHelp.addEventListener('click', (e) => {
+      e.preventDefault();
+      app.views.markdownModal.classList.remove('hidden');
+    });
+    
+    app.elements.closeMarkdownHelp.addEventListener('click', () => {
+      app.views.markdownModal.classList.add('hidden');
+    });
+    
+    // Cerrar el modal haciendo clic fuera de él
+    app.views.markdownModal.addEventListener('click', (e) => {
+      if (e.target === app.views.markdownModal) {
+        app.views.markdownModal.classList.add('hidden');
+      }
+    });
+    
+    // Inicialización
+    document.addEventListener('DOMContentLoaded', () => {
+      showView('wikiList');
+      loadWikis();
+    });
+  </script>
+</body>
+</html>
