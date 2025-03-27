@@ -240,9 +240,9 @@
       <p>Haibit v0.1 - Wiki libre y colaborativa.</p>
       <div class="mt-2">
         <!-- En el footer -->
-<a href="/terminos" data-internal-link class="text-blue-600 hover:text-blue-800 mx-2">Términos y condiciones</a>
-<a href="/privacidad" data-internal-link class="text-blue-600 hover:text-blue-800 mx-2">Privacidad</a>
-<a href="/acerca-de" data-internal-link class="text-blue-600 hover:text-blue-800 mx-2">Acerca de</a>
+<a href="/terminos" class="...">Términos</a>
+<a href="/privacidad" class="...">Privacidad</a>
+<a href="/acerca-de" class="...">Acerca de</a>
       </div>
     </div>
   </footer>
@@ -363,25 +363,64 @@ async function loadWikis() {
 }
 
 function initRouter() {
-  // Manejar carga inicial
-  const path = window.location.pathname.replace('/thehaibit.com/', '');
-  loadPageContent(path);
+  const routes = {
+    '/': showHomePage,
+    '/terminos': () => loadLegalPage('terminos'),
+    '/privacidad': () => loadLegalPage('privacidad'),
+    '/acerca-de': () => loadLegalPage('acerca-de'),
+    '/:slug': loadWikiPage
+  };
 
-  // Manejar navegación
-  window.addEventListener('popstate', () => {
-    const path = window.location.pathname.replace('/thehaibit.com/', '');
-    loadPageContent(path);
-  });
+  const parseRequest = () => {
+    const path = window.location.pathname.replace('/thehaibit.com', '');
+    return { path };
+  };
 
-  // Interceptar clics en enlaces
-  document.body.addEventListener('click', (e) => {
-    if (e.target.matches('[data-internal-link]')) {
-      e.preventDefault();
-      const path = e.target.getAttribute('href');
-      history.pushState(null, null, path);
-      loadPageContent(path);
-    }
-  });
+  const router = () => {
+    const { path } = parseRequest();
+    const handler = Object.keys(routes).find(route => {
+      if (route.startsWith('/:')) return path !== '/';
+      return path === route;
+    }) || '/404';
+    
+    routes[handler] ? routes[handler]() : show404();
+  };
+
+  window.addEventListener('popstate', router);
+  window.addEventListener('DOMContentLoaded', router);
+}
+
+async function loadLegalPage(slug) {
+  const { data } = await supabase
+    .from('legal_pages')
+    .select('*')
+    .eq('slug', slug)
+    .single();
+
+  if (data) {
+    elements.homePage.style.display = 'none';
+    elements.wikiPage.style.display = 'block';
+    document.getElementById('wiki-title').textContent = data.title;
+    document.getElementById('wiki-content').innerHTML = renderWikiContent(data.content);
+  }
+}
+
+async function loadWikiPage() {
+  const slug = window.location.pathname.split('/').pop();
+  const { data } = await supabase
+    .from('wikis')
+    .select('*')
+    .eq('slug', slug)
+    .single();
+
+  if (data) {
+    document.getElementById('wiki-title').textContent = data.title;
+    document.getElementById('wiki-content').innerHTML = renderWikiContent(data.content);
+    elements.homePage.style.display = 'none';
+    elements.wikiPage.style.display = 'block';
+  } else {
+    show404();
+  }
 }
 
 async function loadPageContent(path) {
