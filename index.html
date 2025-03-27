@@ -239,9 +239,10 @@
     <div class="container mx-auto px-4 text-center text-sm text-gray-600">
       <p>Haibit v0.1 - Wiki libre y colaborativa.</p>
       <div class="mt-2">
-        <a href="#" class="text-blue-600 hover:text-blue-800 mx-2">Términos y condiciones</a>
-        <a href="#" class="text-blue-600 hover:text-blue-800 mx-2">Privacidad</a>
-        <a href="#" class="text-blue-600 hover:text-blue-800 mx-2">Acerca de</a>
+        <!-- En el footer -->
+<a href="/terminos" data-internal-link class="text-blue-600 hover:text-blue-800 mx-2">Términos y condiciones</a>
+<a href="/privacidad" data-internal-link class="text-blue-600 hover:text-blue-800 mx-2">Privacidad</a>
+<a href="/acerca-de" data-internal-link class="text-blue-600 hover:text-blue-800 mx-2">Acerca de</a>
       </div>
     </div>
   </footer>
@@ -361,6 +362,69 @@ async function loadWikis() {
   }
 }
 
+function initRouter() {
+  // Manejar carga inicial
+  const path = window.location.pathname.replace('/thehaibit.com/', '');
+  loadPageContent(path);
+
+  // Manejar navegación
+  window.addEventListener('popstate', () => {
+    const path = window.location.pathname.replace('/thehaibit.com/', '');
+    loadPageContent(path);
+  });
+
+  // Interceptar clics en enlaces
+  document.body.addEventListener('click', (e) => {
+    if (e.target.matches('[data-internal-link]')) {
+      e.preventDefault();
+      const path = e.target.getAttribute('href');
+      history.pushState(null, null, path);
+      loadPageContent(path);
+    }
+  });
+}
+
+async function loadPageContent(path) {
+  try {
+    const pageName = path.split('/')[1] || 'home';
+    
+    if (['terminos', 'privacidad', 'acerca-de'].includes(pageName)) {
+      // Cargar páginas legales
+      const { data } = await supabase
+        .from('legal_pages')
+        .select('content')
+        .eq('slug', pageName)
+        .single();
+
+      showLegalPage(data.content);
+    } else {
+      // Cargar wiki normal
+      const { data } = await supabase
+        .from('wikis')
+        .select('*')
+        .eq('slug', pageName)
+        .single();
+
+      if (data) showWikiPage(data);
+      else show404();
+    }
+  } catch (error) {
+    showErrorPage();
+  }
+}
+
+function showLegalPage(content) {
+  elements.homePage.style.display = 'none';
+  elements.wikiPage.style.display = 'block';
+  
+  document.getElementById('wiki-title').textContent = 'Términos y Condiciones';
+  document.getElementById('wiki-date').textContent = '';
+  document.getElementById('wiki-author').textContent = 'Equipo Haibit';
+  document.getElementById('wiki-content').innerHTML = renderWikiContent(content);
+  
+  document.getElementById('edit-wiki-btn').style.display = 'none';
+}
+
 function showErrorState(error) {
     const wikiListEl = document.getElementById('wiki-list');
     wikiListEl.innerHTML = `
@@ -375,6 +439,8 @@ async function saveWiki() {
     const titleInput = document.getElementById('editor-title');
     const contentInput = document.getElementById('editor-content');
     const saveBtn = document.getElementById('save-wiki-btn');
+    const title = elements.editorTitle.value.trim();
+    const slug = generateSlug(title);
 
     // Validación básica
     if (!titleInput.value.trim() || !contentInput.value.trim()) {
@@ -466,6 +532,13 @@ async function loadWikiContent(wikiId) {
 // Funciones del editor
 function updatePreview() {
   elements.editorPreview.innerHTML = renderWikiContent(elements.editorContent.value);
+}
+
+function generateSlug(title) {
+  return title
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, '-')
+    .replace(/(^-|-$)/g, '');
 }
 
 function applyFormat(format) {
