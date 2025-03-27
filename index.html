@@ -386,41 +386,44 @@ function initRouter() {
 
 async function loadPageContent(path) {
   try {
-    const pageName = path.split('/')[1] || 'home';
+    const pageSlug = path.replace(/^\/#\//, ''); // Limpiar URL
     
-    if (['terminos', 'privacidad', 'acerca-de'].includes(pageName)) {
-      // Cargar páginas legales
+    // Primero verificar páginas legales
+    if (['terminos', 'privacidad', 'acerca-de'].includes(pageSlug)) {
       const { data } = await supabase
         .from('legal_pages')
-        .select('content')
-        .eq('slug', pageName)
-        .single();
-
-      showLegalPage(data.content);
-    } else {
-      // Cargar wiki normal
-      const { data } = await supabase
-        .from('wikis')
         .select('*')
-        .eq('slug', pageName)
+        .eq('slug', pageSlug)
         .single();
-
-      if (data) showWikiPage(data);
+      
+      if (data) showLegalPage(data);
       else show404();
+      return;
     }
+
+    // Buscar en wikis
+    const { data: wiki } = await supabase
+      .from('wikis')
+      .select('*')
+      .eq('slug', pageSlug)
+      .single();
+
+    if (wiki) showWikiPage(wiki);
+    else show404();
+    
   } catch (error) {
-    showErrorPage();
+    show404();
   }
 }
 
-function showLegalPage(content) {
+function showLegalPage(pageData) {
   elements.homePage.style.display = 'none';
   elements.wikiPage.style.display = 'block';
   
-  document.getElementById('wiki-title').textContent = 'Términos y Condiciones';
-  document.getElementById('wiki-date').textContent = '';
+  document.getElementById('wiki-title').textContent = pageData.title;
+  document.getElementById('wiki-date').textContent = formatDate(pageData.updated_at);
   document.getElementById('wiki-author').textContent = 'Equipo Haibit';
-  document.getElementById('wiki-content').innerHTML = renderWikiContent(content);
+  document.getElementById('wiki-content').innerHTML = renderWikiContent(pageData.content);
   
   document.getElementById('edit-wiki-btn').style.display = 'none';
 }
