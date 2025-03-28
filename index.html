@@ -1,796 +1,821 @@
 <!DOCTYPE html>
-<html lang="es">
+<html lang="es" class="light">
 <head>
-  <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Haibit - Wiki Libre</title>
-  <script src="https://cdn.tailwindcss.com"></script>
-  <script src="https://cdnjs.cloudflare.com/ajax/libs/marked/4.0.2/marked.min.js"></script>
-  <script src="https://cdnjs.cloudflare.com/ajax/libs/dompurify/2.3.8/purify.min.js"></script>
-  <script src="https://unpkg.com/@supabase/supabase-js@2"></script>
-  <style>
-    /* Mantener los mismos estilos originales */
-    body { font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif; background-color: #f8fafc; }
-    .wiki-content img { max-width: 100%; height: auto; }
-    .wiki-content h1 { font-size: 1.8rem; font-weight: 700; margin-top: 1.5rem; margin-bottom: 1rem; }
-    .wiki-content h2 { font-size: 1.5rem; font-weight: 600; margin-top: 1.25rem; margin-bottom: 0.75rem; }
-    .wiki-content h3 { font-size: 1.25rem; font-weight: 600; margin-top: 1rem; margin-bottom: 0.5rem; }
-    .wiki-content p { margin-bottom: 1rem; line-height: 1.6; }
-    .wiki-content ul, .wiki-content ol { margin-left: 1.5rem; margin-bottom: 1rem; }
-    .wiki-content ul { list-style-type: disc; }
-    .wiki-content ol { list-style-type: decimal; }
-    .wiki-content a { color: #2563eb; text-decoration: none; }
-    .wiki-content img {
-  max-width: 100%;
-  height: auto;
-  border-radius: 8px;
-  margin: 1rem 0;
-  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
-}
-    .wiki-content a:hover { text-decoration: underline; }
-    .wiki-content blockquote { border-left: 4px solid #e5e7eb; padding-left: 1rem; margin-left: 0; margin-right: 0; font-style: italic; color: #6b7280; }
-    .wiki-content pre { background-color: #1e293b; color: #e2e8f0; padding: 1rem; border-radius: 0.5rem; overflow-x: auto; margin-bottom: 1rem; }
-    .wiki-content code { font-family: 'Menlo', 'Monaco', 'Courier New', monospace; font-size: 0.9rem; background-color: #e5e7eb; padding: 0.2rem 0.4rem; border-radius: 0.25rem; }
-    .wiki-content pre code { background-color: transparent; padding: 0; }
-    .wiki-content table { width: 100%; border-collapse: collapse; margin-bottom: 1rem; }
-    .wiki-content table th, .wiki-content table td { border: 1px solid #e5e7eb; padding: 0.5rem; text-align: left; }
-    .wiki-content table th { background-color: #f1f5f9; }
-    .editor-toolbar { position: sticky; top: 0; background-color: white; z-index: 10; border-bottom: 1px solid #e5e7eb; }
-    .editor-toolbar button { background: none; border: none; font-size: 1rem; padding: 0.5rem; cursor: pointer; color: #1e3a8a; }
-    .editor-toolbar button:hover { background-color: #f1f5f9; }
-    .wikilink { color: #2563eb; text-decoration: none; border-bottom: 1px dashed #2563eb; }
-  </style>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>Trysten AI Chat (v6 - Twitter Login + Perf)</title>
+
+    <script src="https://cdn.tailwindcss.com"></script>
+
+    <script>
+        // Configuración inicial de Tailwind (permite modo oscuro basado en clase)
+        if (typeof tailwind !== 'undefined') {
+            tailwind.config = { darkMode: 'class' };
+        } else {
+            console.error("Tailwind lib error: 'tailwind' not defined.");
+            // Fallback básico si Tailwind falla
+            document.documentElement.style.backgroundColor = '#f0f0f0';
+        }
+    </script>
+
+    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+
+    <script src="https://unpkg.com/lucide@latest"></script>
+
+    <script>
+        // --- INICIALIZACIÓN SUPABASE (Con tus claves y manejo de errores robusto) ---
+        const SUPABASE_URL = 'https://ppqhrjfzofztxtlzydvc.supabase.co';
+        const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InBwcWhyamZ6b2Z6dHh0bHp5ZHZjIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NDMxMTY3NzYsImV4cCI6MjA1ODY5Mjc3Nn0.MXUy6fh0xKNKSlv0CyKBQQnmtY3btqGTG5U4shzlKmA';
+        let supabaseClient = null;
+
+        // Cliente Supabase "Dummy" para evitar errores si la inicialización falla
+        const createDummySupabaseClient = (errorMessage) => {
+            console.error(`Using dummy Supabase client due to: ${errorMessage}`);
+            return {
+                auth: {
+                    signInWithPassword: async () => ({ error: { message: errorMessage } }),
+                    signUp: async () => ({ error: { message: errorMessage } }),
+                    signInWithOAuth: async () => ({ error: { message: errorMessage } }),
+                    signOut: async () => ({ error: null }),
+                    onAuthStateChange: () => ({ data: { subscription: { unsubscribe: () => console.log("Unsubscribed from dummy auth listener.") } } }),
+                    getSession: async () => ({ data: { session: null } })
+                }
+            };
+        };
+
+        // Intenta inicializar el cliente Supabase real
+        try {
+            if (typeof supabase === 'undefined' || typeof supabase.createClient !== 'function') {
+                 throw new Error("Supabase library not loaded or invalid.");
+            }
+            supabaseClient = supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+            console.log("Supabase client initialized successfully.");
+        } catch (error) {
+             console.error("CRITICAL Supabase Init Error:", error);
+             supabaseClient = createDummySupabaseClient(error.message || "Supabase client init failed");
+        }
+        // --- FIN SUPABASE ---
+
+        // --- CONFIGURACIÓN OPENROUTER (INSEGURO - Idealmente usar backend) ---
+        // ¡¡ADVERTENCIA!! Exponer claves API en el frontend es inseguro.
+        // Para producción, usa un backend que maneje la API de OpenRouter.
+        const OPENROUTER_API_KEY = "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";
+        const OPENROUTER_MODEL = "deepseek/deepseek-chat-v3-0324:free"; // Modelo gratuito
+        const YOUR_SITE_URL = "http://localhost"; // URL donde corre tu app (para referer OpenRouter) - ¡Asegúrate que coincida con Supabase config!
+        const YOUR_SITE_NAME = "Trysten Chat";    // Nombre de tu sitio (para header OpenRouter)
+        // --- FIN OPENROUTER ---
+
+        // --- Función THEME (Aplicar tema inicial y persistir) ---
+        function applyTheme() {
+             try {
+                 if (localStorage.theme === 'dark' || (!('theme' in localStorage) && window.matchMedia('(prefers-color-scheme: dark)').matches)) {
+                     document.documentElement.classList.add('dark');
+                     return 'dark';
+                 } else {
+                     document.documentElement.classList.remove('dark');
+                     return 'light';
+                 }
+             } catch (e) {
+                 console.error("Theme Apply Error:", e);
+                 return 'light'; // Fallback a light
+             }
+        }
+        // Aplica el tema al cargar el script para evitar FOUC (Flash of Unstyled Content)
+        applyTheme();
+
+    </script>
+    <style>
+        /* Estilos Generales, Scrollbar, Animaciones, Loader, Layout */
+        ::-webkit-scrollbar { width: 6px; height: 6px; }
+        ::-webkit-scrollbar-track { background: transparent; }
+        ::-webkit-scrollbar-thumb { background-color: rgba(156, 163, 175, 0.5); border-radius: 20px; border: transparent; }
+        .dark ::-webkit-scrollbar-thumb { background-color: rgba(75, 85, 99, 0.5); }
+
+        #sidebar { transition: transform 0.3s ease-in-out; }
+        #sidebar-overlay { transition: opacity 0.3s ease-in-out; background-color: rgba(0, 0, 0, 0.6); }
+        #login-screen { transition: opacity 0.3s ease-in-out, visibility 0.3s ease-in-out; } /* Añadido visibility */
+        #login-screen:not(.visible) { visibility: hidden; } /* Control visibility con clase */
+
+        .loader { border: 4px solid #f3f3f3; border-top: 4px solid #4f46e5; /* Indigo */ border-radius: 50%; width: 24px; height: 24px; animation: spin 1s linear infinite; }
+        .dark .loader { border: 4px solid #4b5563; border-top: 4px solid #818cf8; /* Indigo claro */ }
+        @keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }
+
+        html, body { height: 100%; overflow: hidden; font-family: sans-serif; } /* Fuente base */
+        #chat-messages { overscroll-behavior-y: contain; }
+
+        /* Estilos Bloque Código y Copiar (Mejorados) */
+        .code-block-container { margin-top: 0.5rem; margin-bottom: 0.5rem; position: relative; }
+        .code-toggle-button { background: none; border: none; padding: 0.1rem 0.3rem; cursor: pointer; display: inline-flex; align-items: center; font-size: 0.75rem; color: #4f46e5; transition: color 0.2s; }
+        .dark .code-toggle-button { color: #818cf8; }
+        .code-toggle-button:hover { text-decoration: underline; }
+        .copy-code-button {
+            position: absolute; top: 0px; right: 0px;
+            background-color: rgba(243, 244, 246, 0.8); /* bg-gray-100 con opacidad */
+            border: 1px solid rgba(209, 213, 219, 0.5); /* border-gray-300 con opacidad */
+            border-radius: 0.25rem; padding: 0.25rem; cursor: pointer;
+            opacity: 0; transition: opacity 0.2s ease-in-out; color: #374151; /* gray-700 */
+        }
+        .dark .copy-code-button {
+             background-color: rgba(55, 65, 81, 0.8); /* dark:bg-gray-700 con opacidad */
+             border-color: rgba(75, 85, 99, 0.5); /* dark:border-gray-600 con opacidad */
+             color: #d1d5db; /* dark:text-gray-300 */
+        }
+        .code-block-container:hover .copy-code-button { opacity: 1; } /* Mostrar al hacer hover en el contenedor */
+        .copy-code-button i { pointer-events: none; } /* Evita que el icono interfiera con el clic */
+        .code-content { display: none; background-color: #f3f4f6; padding: 0.75rem; border-radius: 0.375rem; overflow-x: auto; font-size: 0.8em; font-family: monospace; white-space: pre; border: 1px solid #e5e7eb; margin-top: 0.25rem; }
+        .dark .code-content { background-color: #1f2937; border-color: #374151; color: #d1d5db; }
+        .code-content.visible { display: block; }
+        .code-content code { font-family: inherit; color: inherit; }
+
+        /* Estilos Botones Auth */
+        .auth-button { transition: background-color 0.2s, transform 0.1s, border-color 0.2s, color 0.2s; }
+        .auth-button:active { transform: scale(0.98); } /* Efecto al pulsar */
+
+        /* Estilos Perfil Dropdown */
+        #profile-section img { border: 1px solid rgba(128,128,128,0.2); }
+        #profile-dropdown {
+            width: calc(100% - 1rem); left: 0.5rem; bottom: calc(100% + 0.5rem);
+            max-height: 50vh; overflow-y: auto;
+            transition: opacity 0.2s ease-in-out, transform 0.2s ease-in-out, visibility 0.2s;
+            opacity: 0; transform: translateY(10px); pointer-events: none; visibility: hidden;
+        }
+        #profile-dropdown.visible { opacity: 1; transform: translateY(0); pointer-events: auto; visibility: visible; }
+
+        /* Chat Bubbles */
+        .message-user > div { background-color: #1f2937; color: #f9fafb; } /* Más oscuro user */
+        .dark .message-user > div { background-color: #4f46e5; color: white; } /* Indigo dark user */
+        .message-ai > div { background-color: #e5e7eb; color: #1f2937; } /* Gris claro ai */
+        .dark .message-ai > div { background-color: #374151; color: #e5e7eb; } /* Gris oscuro ai */
+    </style>
 </head>
-<body class="min-h-screen flex flex-col">
-  <nav class="bg-white shadow-sm">
-    <div class="container mx-auto px-4 py-2 flex justify-between items-center">
-      <a href="#" class="text-2xl font-bold text-blue-800 flex items-center" id="logo-link">
-        <svg xmlns="http://www.w3.org/2000/svg" width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="mr-2">
-          <path d="M19.5 14.5v-2.5a1 1 0 0 0-1-1h-1a1 1 0 0 0-1 1v1.5a1 1 0 0 0 1 1h1.5"></path>
-          <path d="M19.5 19.5v-1.5a1 1 0 0 0-1-1h-1.5a1 1 0 0 1-1-1v-1.5a1 1 0 0 0-1-1h-1.5"></path>
-          <path d="M9.5 4.5v1a1 1 0 0 0 1 1h1.5a1 1 0 0 1 1 1v1.5a1 1 0 0 0 1 1h1.5"></path>
-          <path d="M4.5 19.5v-1.5a1 1 0 0 1 1-1h1.5a1 1 0 0 0 1-1v-1.5a1 1 0 0 1 1-1h1.5"></path>
-          <path d="M4.5 4.5h3.5a1 1 0 0 1 1 1v1.5a1 1 0 0 0 1 1H12"></path>
-        </svg>
-        Haibit
-      </a>
-      <div class="flex items-center">
-        <div class="relative mr-2 md:mr-4" id="search-container">
-          <input 
-            type="text" 
-            class="border border-gray-300 rounded-full py-1 px-4 pl-10 w-32 md:w-64 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent" 
-            placeholder="Buscar..." 
-            id="search-input"
-          >
-          <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400">
-            <circle cx="11" cy="11" r="8"></circle>
-            <line x1="21" y1="21" x2="16.65" y2="16.65"></line>
-          </svg>
+
+<body class="bg-white dark:bg-black text-gray-900 dark:text-gray-100 h-screen overflow-hidden flex flex-col md:flex-row text-sm sm:text-base">
+
+    <aside id="sidebar" class="absolute inset-y-0 left-0 z-30 w-64 bg-gray-100 dark:bg-black p-4 transform -translate-x-full md:relative md:translate-x-0 flex flex-col border-r border-gray-200 dark:border-gray-700 flex-shrink-0 h-full">
+        <div class="mb-6 flex justify-between items-center flex-shrink-0">
+            <h2 class="text-xl font-semibold text-gray-800 dark:text-gray-200">Chats</h2>
+            <button id="close-sidebar" class="md:hidden text-gray-500 dark:text-gray-400 hover:text-gray-900 dark:hover:text-white p-1 rounded-full"><i data-lucide="x"></i></button>
         </div>
-        <div id="user-profile">
-          <img src="https://cdn-icons-png.flaticon.com/512/3135/3135715.png" alt="Perfil" class="w-8 h-8 rounded-full cursor-pointer">
+        <div class="flex-grow overflow-y-auto mb-4 scrollbar-thin scrollbar-thumb-gray-400 dark:scrollbar-thumb-gray-600">
+            <h3 class="text-xs uppercase text-gray-500 dark:text-gray-400 mb-2 font-medium sticky top-0 bg-gray-100 dark:bg-black py-1">Recientes</h3>
+            <ul class="space-y-1">
+                <li><a href="#" class="block p-2 rounded-lg hover:bg-gray-200 dark:hover:bg-gray-800 truncate text-sm">Conversación inicial</a></li>
+                </ul>
         </div>
-      </div>
+        <div class="mt-auto border-t border-gray-200 dark:border-gray-700 pt-4 flex-shrink-0 relative">
+            <div id="profile-dropdown" class="absolute bottom-full left-0 mb-2 w-full bg-white dark:bg-gray-800 rounded-md shadow-lg border border-gray-200 dark:border-gray-700 z-40">
+                <button id="logout-button-dropdown" class="w-full flex items-center p-3 text-red-600 hover:bg-red-100 dark:hover:bg-red-900/50 text-sm rounded-md transition-colors">
+                    <i data-lucide="log-out" class="mr-2 w-4 h-4"></i><span>Cerrar Sesión</span>
+                </button>
+            </div>
+            <div id="profile-section" class="flex items-center space-x-3 cursor-pointer p-2 rounded-lg hover:bg-gray-200 dark:hover:bg-gray-800 hidden">
+                 <div class="w-9 h-9 rounded-full bg-gray-300 dark:bg-gray-600 flex items-center justify-center flex-shrink-0 overflow-hidden">
+                     <img id="profile-pic" src="#" alt="Avatar" class="w-full h-full object-cover hidden">
+                     <i id="profile-icon-default" data-lucide="user" class="w-5 h-5 text-gray-500 dark:text-gray-400"></i>
+                 </div>
+                 <span id="profile-name" class="text-sm font-medium truncate flex-grow min-w-0">Usuario</span>
+                 <i data-lucide="chevron-up" class="profile-chevron w-4 h-4 ml-auto text-gray-500 flex-shrink-0 transition-transform duration-200"></i>
+            </div>
+            <button id="theme-toggle" class="w-full flex items-center p-2 rounded-lg hover:bg-gray-200 dark:hover:bg-gray-800 mt-2 text-sm transition-colors">
+                 <i data-lucide="sun" class="mr-2 dark:hidden w-4 h-4"></i><i data-lucide="moon" class="mr-2 hidden dark:inline-block w-4 h-4"></i><span class="toggle-text">Cambiar Tema</span>
+             </button>
+        </div>
+    </aside>
+
+    <div id="sidebar-overlay" class="fixed inset-0 z-20 hidden md:hidden"></div>
+
+    <main class="flex-1 flex flex-col h-full bg-white dark:bg-black overflow-hidden">
+        <header class="flex items-center justify-between p-3 border-b border-gray-200 dark:border-gray-700 flex-shrink-0">
+            <button id="menu-button" class="md:hidden text-gray-500 dark:text-gray-400 hover:text-gray-900 dark:hover:text-white p-1"><i data-lucide="menu"></i></button>
+            <div class="flex items-center space-x-2 flex-grow md:flex-grow-0 justify-center md:justify-start md:ml-2">
+                <svg id="custom-logo" class="w-6 h-6 text-indigo-600 dark:text-indigo-400 flex-shrink-0" viewBox="0 0 100 100" fill="none" xmlns="http://www.w3.org/2000/svg">
+                    <path d="M50 5 L75 25 L75 75 L50 95 L25 75 L25 25 Z" stroke="currentColor" stroke-width="8" stroke-linejoin="round"/>
+                    <path d="M50 28 L62 40 L50 52 L38 40 Z" fill="currentColor"/>
+                    <path d="M38 60 L50 72 L62 60 L50 48 Z" fill="currentColor" opacity="0.6"/>
+                </svg>
+                <span class="font-semibold text-lg text-gray-800 dark:text-gray-200">Trysten</span>
+            </div>
+            <div class="w-8 md:hidden"></div>
+        </header>
+
+        <div id="chat-messages" class="flex-1 overflow-y-auto p-4 space-y-4 scrollbar-thin scrollbar-thumb-gray-300 dark:scrollbar-thumb-gray-700">
+            </div>
+
+        <div id="loading-indicator" class="px-4 pb-2 hidden items-center justify-start flex-shrink-0">
+             <div class="loader mr-2"></div><span class="text-sm text-gray-500 dark:text-gray-400">AI está pensando...</span>
+        </div>
+
+        <div class="p-3 border-t border-gray-200 dark:border-gray-700 flex-shrink-0 bg-white dark:bg-black">
+            <form id="chat-form" class="flex items-center space-x-2">
+                <input type="text" id="message-input" placeholder="Escribe tu mensaje..." autocomplete="off" disabled
+                       class="flex-1 p-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-gray-50 dark:bg-gray-800 focus:outline-none focus:ring-2 focus:ring-offset-1 focus:ring-indigo-500 dark:focus:ring-indigo-400 focus:border-transparent dark:text-white disabled:opacity-50 disabled:cursor-not-allowed transition-colors"/>
+                <button type="submit" class="p-2 bg-indigo-600 hover:bg-indigo-700 text-white rounded-lg disabled:opacity-50 disabled:cursor-not-allowed flex-shrink-0 transition-colors auth-button" id="send-button" disabled>
+                    <i data-lucide="send-horizontal" class="w-5 h-5"></i>
+                </button>
+            </form>
+        </div>
+    </main>
+
+    <div id="login-screen" class="fixed inset-0 bg-gradient-to-br from-gray-50 via-gray-100 to-gray-200 dark:from-black dark:via-black dark:to-black z-50 flex items-center justify-center p-4 overflow-y-auto opacity-100 visible">
+        <div class="bg-white dark:bg-gray-900 p-6 sm:p-8 rounded-xl shadow-2xl w-full max-w-md border border-gray-200 dark:border-gray-700">
+            <div class="flex justify-center mb-6">
+                 <svg id="custom-logo-login" class="w-12 h-12 text-indigo-600 dark:text-indigo-400" viewBox="0 0 100 100" fill="none" xmlns="http://www.w3.org/2000/svg">
+                     <path d="M50 5 L75 25 L75 75 L50 95 L25 75 L25 25 Z" stroke="currentColor" stroke-width="8" stroke-linejoin="round"/>
+                     <path d="M50 28 L62 40 L50 52 L38 40 Z" fill="currentColor"/>
+                     <path d="M38 60 L50 72 L62 60 L50 48 Z" fill="currentColor" opacity="0.6"/>
+                 </svg>
+            </div>
+            <h2 class="text-2xl font-semibold mb-6 text-center text-gray-800 dark:text-gray-100">Bienvenido a Trysten</h2>
+            <div id="auth-form" class="space-y-5">
+                <div>
+                    <label for="login-email" class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Correo Electrónico</label>
+                    <input type="email" id="login-email" placeholder="tu@email.com" required
+                           class="w-full p-3 border border-gray-300 dark:border-gray-600 rounded-lg bg-gray-50 dark:bg-gray-800 focus:outline-none focus:ring-2 focus:ring-offset-1 focus:ring-indigo-500 dark:focus:ring-indigo-400 focus:border-transparent dark:text-white transition-colors">
+                </div>
+                <div>
+                    <label for="login-password" class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Contraseña</label>
+                    <input type="password" id="login-password" placeholder="••••••••" required
+                           class="w-full p-3 border border-gray-300 dark:border-gray-600 rounded-lg bg-gray-50 dark:bg-gray-800 focus:outline-none focus:ring-2 focus:ring-offset-1 focus:ring-indigo-500 dark:focus:ring-indigo-400 focus:border-transparent dark:text-white transition-colors">
+                </div>
+                <div class="flex flex-col sm:flex-row space-y-3 sm:space-y-0 sm:space-x-3 pt-2">
+                    <button type="button" id="login-button" class="flex-1 w-full py-2 px-4 bg-indigo-600 hover:bg-indigo-700 text-white rounded-lg font-medium text-sm auth-button">Iniciar Sesión</button>
+                    <button type="button" id="signup-button" class="flex-1 w-full py-2 px-4 bg-gray-600 hover:bg-gray-700 text-white rounded-lg font-medium text-sm auth-button">Registrarse</button>
+                </div>
+                <div class="relative flex py-2 items-center">
+                    <div class="flex-grow border-t border-gray-300 dark:border-gray-600"></div>
+                    <span class="flex-shrink mx-4 text-gray-400 dark:text-gray-500 text-xs">O</span>
+                    <div class="flex-grow border-t border-gray-300 dark:border-gray-600"></div>
+                </div>
+                <button id="discord-login-btn" class="w-full bg-[#5865F2] hover:bg-[#4752C4] text-white py-2 px-4 rounded-lg flex items-center justify-center auth-button">
+                    <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="currentColor" class="mr-2"><path d="M20.317 4.3698a19.7913 19.7913 0 00-4.8851-1.5152.0741.0741 0 00-.0785.0371c-.211.3753-.4447.8648-.6083 1.2495-1.8447-.2762-3.68-.2762-5.4868 0-.1636-.3933-.4058-.8742-.6177-1.2495a.077.077 0 00-.0785-.037 19.7363 19.7363 0 00-4.8852 1.515.0699.0699 0 00-.0321.0277C.5334 9.0458-.319 13.5799.0992 18.0578a.0824.0824 0 00.0312.0561c2.0528 1.5076 4.0413 2.4228 5.9929 3.0294a.0777.0777 0 00.0842-.0276c.4616-.6304.8731-1.2952 1.226-1.9942a.076.076 0 00-.0416-.1057c-.6528-.2476-1.2743-.5495-1.8722-.8923a.077.077 0 01-.0076-.1277c.1258-.0943.2517-.1923.3718-.2914a.0743.0743 0 01.0776-.0105c3.9278 1.7933 8.18 1.7933 12.0614 0a.0739.0739 0 01.0785.0095c.1202.099.246.1981.3728.2924a.077.077 0 01-.0066.1276 12.2986 12.2986 0 01-1.873.8914.0766.0766 0 00-.0407.1067c.3604.698.7719 1.3628 1.225 1.9932a.076.076 0 00.0842.0286c1.961-.6067 3.9495-1.5219 6.0023-3.0294a.077.077 0 00.0313-.0552c.5004-5.177-.8382-9.6739-3.5485-13.6604a.061.061 0 00-.0312-.0286zM8.02 15.3312c-1.1825 0-2.1569-1.0857-2.1569-2.419 0-1.3332.9555-2.4189 2.157-2.4189 1.2108 0 2.1757 1.0952 2.1568 2.419 0 1.3332-.9555 2.4189-2.1569 2.4189zm7.9748 0c-1.1825 0-2.1569-1.0857-2.1569-2.419 0-1.3332.9554-2.4189 2.1569-2.4189 1.2108 0 2.1757 1.0952 2.1568 2.419 0 1.3332-.946 2.4189-2.1568 2.4189Z"></path></svg>
+                    Continuar con Discord
+                </button>
+                <button id="twitter-login-btn" class="w-full bg-black hover:bg-gray-800 dark:bg-white dark:hover:bg-gray-200 text-white dark:text-black py-2 px-4 rounded-lg flex items-center justify-center auth-button font-medium text-sm">
+                     <span class="text-lg mr-2 font-bold">𝕏</span> Continuar con X (Twitter)
+                </button>
+                <p id="auth-message" class="text-xs text-center text-gray-500 dark:text-gray-400 h-4"></p>
+                <p id="auth-error" class="text-xs text-center text-red-600 dark:text-red-400 h-4"></p>
+            </div>
+        </div>
     </div>
-  </nav>
-
-  <main class="flex-grow container mx-auto px-4 py-4">
-    <div id="home-page" class="block">
-      <div class="mb-4 flex justify-between items-center">
-        <h1 class="text-xl font-bold text-gray-800">Wikis recientes</h1>
-        <button id="new-wiki-btn" class="flex items-center bg-blue-600 hover:bg-blue-700 text-white py-2 px-4 rounded-lg shadow-sm">
-          <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="mr-1">
-            <line x1="12" y1="5" x2="12" y2="19"></line>
-            <line x1="5" y1="12" x2="19" y2="12"></line>
-          </svg>
-          Nueva
-        </button>
-      </div>
-      <div id="wiki-list" class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-        <div class="bg-white p-4 rounded-lg shadow-sm border border-gray-100 hover:shadow-md transition-shadow animate-pulse">
-          <div class="h-4 bg-gray-200 rounded w-3/4 mb-2"></div>
-          <div class="h-3 bg-gray-100 rounded w-1/2 mb-4"></div>
-          <div class="h-10 bg-gray-100 rounded w-full"></div>
-        </div>
-        <div class="bg-white p-4 rounded-lg shadow-sm border border-gray-100 hover:shadow-md transition-shadow animate-pulse">
-          <div class="h-4 bg-gray-200 rounded w-3/4 mb-2"></div>
-          <div class="h-3 bg-gray-100 rounded w-1/2 mb-4"></div>
-          <div class="h-10 bg-gray-100 rounded w-full"></div>
-        </div>
-      </div>
-    </div>
-
-    <div id="wiki-page" class="hidden">
-      <div class="mb-4">
-        <button id="back-to-home" class="text-blue-600 hover:text-blue-800 flex items-center">
-          <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="mr-1">
-            <line x1="19" y1="12" x2="5" y2="12"></line>
-            <polyline points="12 19 5 12 12 5"></polyline>
-          </svg>
-          Volver
-        </button>
-      </div>
-      <div class="bg-white rounded-lg shadow-sm border border-gray-100 p-6">
-        <h1 id="wiki-title" class="text-2xl font-bold text-gray-900 mb-2"></h1>
-        <div class="flex items-center text-sm text-gray-500 mb-4">
-          <span id="wiki-date"></span>
-          <span class="mx-2">•</span>
-          <span id="wiki-author"></span>
-        </div>
-        <div id="wiki-content" class="wiki-content prose max-w-none"></div>
-        <div class="mt-6 flex justify-end">
-          <button id="edit-wiki-btn" class="flex items-center text-blue-600 hover:text-blue-800">
-            <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="mr-1">
-              <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"></path>
-              <path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"></path>
-            </svg>
-            Editar
-          </button>
-        </div>
-      </div>
-    </div>
-
-    <div id="editor-page" class="hidden">
-      <div class="mb-4 flex justify-between items-center">
-        <button id="back-from-editor" class="text-blue-600 hover:text-blue-800 flex items-center">
-          <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="mr-1">
-            <line x1="19" y1="12" x2="5" y2="12"></line>
-            <polyline points="12 19 5 12 12 5"></polyline>
-          </svg>
-          Cancelar
-        </button>
-        <button id="save-wiki-btn" class="flex items-center bg-blue-600 hover:bg-blue-700 text-white py-2 px-4 rounded-lg shadow-sm">
-          <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="mr-1">
-            <path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z"></path>
-            <polyline points="17 21 17 13 7 13 7 21"></polyline>
-            <polyline points="7 3 7 8 15 8"></polyline>
-          </svg>
-          Guardar
-        </button>
-      </div>
-      <div class="bg-white rounded-lg shadow-sm border border-gray-100 p-4">
-        <input 
-          type="text" 
-          id="editor-title" 
-          class="w-full text-xl font-bold text-gray-900 mb-4 border-b border-gray-200 pb-2 focus:outline-none focus:border-blue-500" 
-          placeholder="Título de la Wiki"
-        >
-        <div class="editor-toolbar mb-2 pb-1 flex flex-wrap">
-          <button data-format="h1" title="Encabezado 1">H1</button>
-          <button data-format="h2" title="Encabezado 2">H2</button>
-          <button data-format="h3" title="Encabezado 3">H3</button>
-          <button data-format="bold" title="Negrita">
-            <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-              <path d="M6 4h8a4 4 0 0 1 4 4 4 4 0 0 1-4 4H6z"></path>
-              <path d="M6 12h9a4 4 0 0 1 4 4 4 4 0 0 1-4 4H6z"></path>
-            </svg>
-          </button>
-          <button data-format="italic" title="Cursiva">
-            <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-              <line x1="19" y1="4" x2="10" y2="4"></line>
-              <line x1="14" y1="20" x2="5" y2="20"></line>
-              <line x1="15" y1="4" x2="9" y2="20"></line>
-            </svg>
-          </button>
-          <button data-format="list-ul" title="Lista">
-            <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-              <line x1="8" y1="6" x2="21" y2="6"></line>
-              <line x1="8" y1="12" x2="21" y2="12"></line>
-              <line x1="8" y1="18" x2="21" y2="18"></line>
-              <line x1="3" y1="6" x2="3.01" y2="6"></line>
-              <line x1="3" y1="12" x2="3.01" y2="12"></line>
-              <line x1="3" y1="18" x2="3.01" y2="18"></line>
-            </svg>
-          </button>
-          <button data-format="list-ol" title="Lista numerada">
-                        <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-              <line x1="10" y1="6" x2="21" y2="6"></line>
-              <line x1="10" y1="12" x2="21" y2="12"></line>
-              <line x1="10" y1="18" x2="21" y2="18"></line>
-              <path d="M4 6h1v4"></path>
-              <path d="M4 10h2"></path>
-              <path d="M6 18H4c0-1 2-2 2-3s-1-1.5-2-1"></path>
-            </svg>
-          </button>
-          <button data-format="link" title="Enlace">
-            <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-              <path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71"></path>
-              <path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71"></path>
-            </svg>
-          </button>
-          <button data-format="image" title="Imagen">
-            <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-              <rect x="3" y="3" width="18" height="18" rx="2" ry="2"></rect>
-              <circle cx="8.5" cy="8.5" r="1.5"></circle>
-              <polyline points="21 15 16 10 5 21"></polyline>
-            </svg>
-          </button>
-          <button data-format="code" title="Código">
-            <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-              <polyline points="16 18 22 12 16 6"></polyline>
-              <polyline points="8 6 2 12 8 18"></polyline>
-            </svg>
-          </button>
-          <button data-format="table" title="Tabla">
-            <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-              <rect x="3" y="3" width="18" height="18" rx="2" ry="2"></rect>
-              <line x1="3" y1="9" x2="21" y2="9"></line>
-              <line x1="3" y1="15" x2="21" y2="15"></line>
-              <line x1="9" y1="3" x2="9" y2="21"></line>
-              <line x1="15" y1="3" x2="15" y2="21"></line>
-            </svg>
-          </button>
-          <button data-format="wikilink" title="Wiki Link">[[]]</button>
-        </div>
-        <textarea 
-          id="editor-content" 
-          class="w-full h-80 md:h-96 p-2 border border-gray-200 rounded-lg focus:outline-none focus:border-blue-500 font-mono text-sm"
-          placeholder="Escribe aquí el contenido de tu wiki utilizando wikitexto..."
-        ></textarea>
-        <div class="mt-4">
-          <h3 class="text-sm font-medium text-gray-700 mb-2">Vista previa</h3>
-          <div id="editor-preview" class="wiki-content p-4 border border-gray-200 rounded-lg min-h-[100px]"></div>
-        </div>
-      </div>
-    </div>
-  </main>
-
-  <footer class="bg-white border-t border-gray-200 py-4 mt-8">
-    <div class="container mx-auto px-4 text-center text-sm text-gray-600">
-      <p>Haibit v0.1 - Wiki libre y colaborativa.</p>
-      <div class="mt-2">
-        <!-- En el footer -->
-<a href="/terminos" data-internal-link class="text-blue-600 hover:text-blue-800 mx-2">Términos y condiciones</a>
-<a href="/privacidad" data-internal-link class="text-blue-600 hover:text-blue-800 mx-2">Privacidad</a>
-<a href="/acerca-de" data-internal-link class="text-blue-600 hover:text-blue-800 mx-2">Acerca de</a>
-      </div>
-    </div>
-  </footer>
-
-  <script>
-    // Configuración de Supabase
-    const SUPABASE_URL = 'https://cwuyqgeortpgvahunlct.supabase.co';
-    const SUPABASE_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImN3dXlxZ2VvcnRwZ3ZhaHVubGN0Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NDI0ODk3NTksImV4cCI6MjA1ODA2NTc1OX0.0XWFw2cQpiqCjO79uVZFVJKzaXL2C0q3QVtQcRS-D0U';
-    window.supabase = supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
-
-    // Elementos DOM y estado
-    let currentWikiId = null;
-    let wikiList = [];
-    let currentUser = { id: 'default-user', username: 'Usuario', avatar_url: 'https://cdn-icons-png.flaticon.com/512/3135/3135715.png' };
-    const elements = {
-      homePage: document.getElementById('home-page'),
-      wikiPage: document.getElementById('wiki-page'),
-      editorPage: document.getElementById('editor-page'),
-      wikiList: document.getElementById('wiki-list'),
-      wikiPageContent: document.getElementById('wiki-content'),
-  errorContainer: document.getElementById('error-container'),
-      editorTitle: document.getElementById('editor-title'),
-      editorContent: document.getElementById('editor-content'),
-      editorPreview: document.getElementById('editor-preview')
-    };
-
-    // Inicialización
-    document.addEventListener('DOMContentLoaded', initRouter);
-window.addEventListener('popstate', initRouter);
-    document.addEventListener('DOMContentLoaded', () => {
-      setupEventListeners();
-      loadWikis();
-    });
-
-    function setupEventListeners() {
-      // Navegación
-      document.getElementById('logo-link').addEventListener('click', showHomePage);
-      document.getElementById('back-to-home').addEventListener('click', showHomePage);
-      document.getElementById('back-from-editor').addEventListener('click', handleBackFromEditor);
-      
-      // Acciones de wiki
-      document.getElementById('new-wiki-btn').addEventListener('click', showNewWikiEditor);
-      document.getElementById('edit-wiki-btn').addEventListener('click', showEditWikiEditor);
-      document.getElementById('save-wiki-btn').addEventListener('click', saveWiki);
-      
-      // Editor
-      elements.editorContent.addEventListener('input', updatePreview);
-      
-      // Botones de formato
-      document.querySelectorAll('.editor-toolbar button').forEach(button => {
-        button.addEventListener('click', () => applyFormat(button.dataset.format));
-      });
-      
-      // Búsqueda
-      document.getElementById('search-input').addEventListener('input', handleSearch);
-    }
-
-    // Funciones de navegación
-function showHomePage() {
-  elements.homePage.style.display = 'block';
-  elements.wikiPage.style.display = 'none';
-  elements.editorPage.style.display = 'none';
-  currentWikiId = null;
-}
-
-function showWikiPage(wikiId) {
-  currentWikiId = wikiId;
-  elements.homePage.style.display = 'none';
-  elements.wikiPage.style.display = 'block';
-  elements.editorPage.style.display = 'none';
-  loadWikiContent(wikiId);
-}
-
-function showNewWikiEditor() {
-  elements.homePage.style.display = 'none';
-  elements.wikiPage.style.display = 'none';
-  elements.editorPage.style.display = 'block';
-  elements.editorTitle.value = '';
-  elements.editorContent.value = '';
-  updatePreview();
-}
-
-function showEditWikiEditor() {
-  const wiki = wikiList.find(w => w.id === currentWikiId);
-  if (wiki) {
-    elements.editorTitle.value = wiki.title;
-    elements.editorContent.value = wiki.content;
-    updatePreview();
-  }
-  elements.homePage.style.display = 'none';
-  elements.wikiPage.style.display = 'none';
-  elements.editorPage.style.display = 'block';
-}
-
-// Cargar wikis desde Supabase
-async function loadWikis() {
-  try {
-    const { data, error } = await supabase
-      .from('wikis')
-      .select('*')
-      .order('created_at', { ascending: false });
-
-    if (error) throw error;
-    
-    wikiList = data; // Actualizamos la variable de estado
-    
-    if (data.length === 0) {
-      document.getElementById('wiki-list').innerHTML = `
-        <div class="p-4 text-gray-500">
-          No hay wikis disponibles. ¡Sé el primero en crear una!
-        </div>
-      `;
-      return;
-    }
-
-    renderWikiList(data);
-    
-  } catch (error) {
-    console.error('Error loading wikis:', error);
-    showErrorState(error);
-  }
-}
-
-function initRouter() {
-  const path = window.location.pathname;
-  
-  // Mapeo de rutas principales
-  const routeMap = {
-    '/': showHomePage,
-    '/terminos': () => showLegalPage('terminos'),
-    '/privacidad': () => showLegalPage('privacidad'),
-    '/acerca-de': () => showLegalPage('acerca-de'),
-    '/los-backrooms': () => showWikiPage('los-backrooms'),
-    '/bienvenido-a-haibit': () => showWikiPage('bienvenido-a-haibit')
-  };
-
-  // Manejar ruta actual
-  if (routeMap[path]) {
-    routeMap[path]();
-  } else {
-    // Intentar cargar cualquier wiki
-    const slug = path.split('/').pop();
-    loadWikiContent(slug);
-  }
-}
-
-function show404() {
-  elements.homePage.style.display = 'none';
-  elements.wikiPage.style.display = 'none';
-  elements.editorPage.style.display = 'none';
-  
-  // Crear elemento de error 404
-  const errorHtml = `
-    <div class="text-center py-20">
-      <h1 class="text-6xl font-bold text-gray-800 mb-4">404</h1>
-      <p class="text-xl text-gray-600 mb-8">Página no encontrada</p>
-      <button onclick="showHomePage()" class="bg-blue-500 text-white px-6 py-2 rounded-lg hover:bg-blue-600">
-        Volver al inicio
-      </button>
-    </div>
-  `;
-  
-  elements.wikiPage.innerHTML = errorHtml;
-  elements.wikiPage.style.display = 'block';
-}
-
-function showErrorPage(error) {
-  elements.homePage.style.display = 'none';
-  elements.wikiPage.style.display = 'none';
-  elements.editorPage.style.display = 'none';
-
-  // Crear elemento de error genérico
-  const errorHtml = `
-    <div class="text-center py-20">
-      <h1 class="text-6xl font-bold text-red-600 mb-4">⚠️ Error</h1>
-      <p class="text-xl text-gray-600 mb-4">${error?.message || 'Error desconocido'}</p>
-      <button onclick="location.reload()" class="bg-blue-500 text-white px-6 py-2 rounded-lg hover:bg-blue-600">
-        Recargar página
-      </button>
-    </div>
-  `;
-  
-  elements.wikiPage.innerHTML = errorHtml;
-  elements.wikiPage.style.display = 'block';
-}
-
-async function loadLegalPage(slug) {
-  const { data } = await supabase
-    .from('legal_pages')
-    .select('*')
-    .eq('slug', slug)
-    .single();
-
-  if (data) {
-    elements.homePage.style.display = 'none';
-    elements.wikiPage.style.display = 'block';
-    document.getElementById('wiki-title').textContent = data.title;
-    document.getElementById('wiki-content').innerHTML = renderWikiContent(data.content);
-  }
-}
-
-async function showWikiPage(slug) {
-  const { data } = await supabase
-    .from('wikis')
-    .select('*')
-    .eq('slug', slug)
-    .single();
-
-  if (data) {
-    document.getElementById('wiki-title').textContent = data.title;
-    document.getElementById('wiki-content').innerHTML = renderWikiContent(data.content);
-    elements.wikiPage.style.display = 'block';
-    elements.homePage.style.display = 'none';
-  } else {
-    show404();
-  }
-}
-
-async function showLegalPage(slug) {
-  const { data } = await supabase
-    .from('legal_pages')
-    .select('*')
-    .eq('slug', slug)
-    .single();
-
-  if (data) {
-    document.getElementById('wiki-title').textContent = data.title;
-    document.getElementById('wiki-content').innerHTML = renderWikiContent(data.content);
-    elements.wikiPage.style.display = 'block';
-    elements.homePage.style.display = 'none';
-  }
-}
-
-function handleRouting() {
-  const path = window.location.hash.replace('#/', '') || '/';
-
-  if (path === '/') {
-    showHomePage();
-  } else if (['terminos', 'privacidad', 'acerca-de'].includes(path)) {
-    loadLegalPage(path);
-  } else {
-    loadWikiPage(path);
-  }
-}
-
-async function loadWikiPage(slug) {
-  try {
-    const { data, error } = await supabase
-      .from('wikis')
-      .select('*')
-      .eq('slug', slug)
-      .single();
-
-    if (error || !data) {
-      show404();
-      return;
-    }
-
-    showWikiPage(data);
-  } catch (error) {
-    showErrorPage(error);
-  }
-}
-
-// Inicializar el router
-window.addEventListener('hashchange', handleRouting);
-window.addEventListener('load', handleRouting);
-
-async function loadPageContent(path) {
-  try {
-    const pageSlug = path.replace(/^\/#\//, ''); // Limpiar URL
-
-    // 1. Intentar cargar página legal
-    if (['terminos', 'privacidad', 'acerca-de'].includes(pageSlug)) {
-      const { data } = await supabase
-        .from('legal_pages')
-        .select('*')
-        .eq('slug', pageSlug)
-        .single();
-      return showLegalPage(data);
-    }
-
-    // 2. Intentar cargar wiki por slug
-    const { data: wiki } = await supabase
-      .from('wikis')
-      .select('*')
-      .eq('slug', pageSlug)
-      .single();
-
-    if (wiki) return showWikiPage(wiki);
-    
-    // 3. Si no encuentra nada
-    show404();
-
-  } catch (error) {
-    console.error('Error loading content:', error);
-    showErrorPage();
-  }
-}
-
-function showLegalPage(pageData) {
-  elements.homePage.style.display = 'none';
-  elements.wikiPage.style.display = 'block';
-  
-  document.getElementById('wiki-title').textContent = pageData.title;
-  document.getElementById('wiki-date').textContent = formatDate(pageData.updated_at);
-  document.getElementById('wiki-author').textContent = 'Equipo Haibit';
-  document.getElementById('wiki-content').innerHTML = renderWikiContent(pageData.content);
-  
-  document.getElementById('edit-wiki-btn').style.display = 'none';
-}
-
-function showErrorState(error) {
-    const wikiListEl = document.getElementById('wiki-list');
-    wikiListEl.innerHTML = `
-        <div class="p-4 text-red-600 bg-red-50 rounded-lg">
-            <strong>Error cargando wikis:</strong> ${sanitizeHTML(error.message)}
-        </div>
-    `;
-}
-
-// Guardar wiki
-async function saveWiki() {
-    const titleInput = document.getElementById('editor-title');
-    const contentInput = document.getElementById('editor-content');
-    const saveBtn = document.getElementById('save-wiki-btn');
-    const title = elements.editorTitle.value.trim();
-    const slug = generateSlug(title);
-
-    // Validación básica
-    if (!titleInput.value.trim() || !contentInput.value.trim()) {
-        alert('¡Título y contenido son obligatorios!');
-        return;
-    }
-
-    saveBtn.disabled = true;
-    saveBtn.textContent = 'Guardando...';
-
-    try {
-        const { data, error } = await supabase
-            .from('wikis')
-            .upsert({
-                id: currentWikiId || undefined,
-                title: titleInput.value.trim(),
-                content: contentInput.value.trim(),
-                updated_at: new Date().toISOString()
-            })
-            .select()
-            .single();
-
-        if (error) throw error;
-
-        // Actualizar UI
-        currentWikiId = data.id;
-        titleInput.value = '';
-        contentInput.value = '';
-        
-        showWikiPage(data.id);
-        loadWikis();
-
-    } catch (error) {
-        console.error('Error al guardar:', error);
-        alert(`Error: ${error.message}`);
-    } finally {
-        saveBtn.disabled = false;
-        saveBtn.textContent = 'Guardar';
-    }
-}
-
-// Renderizar lista de wikis
-function renderWikiList(wikis) {
-  const wikiListEl = document.getElementById('wiki-list');
-  
-  wikiListEl.innerHTML = wikis.map(wiki => `
-    <div class="bg-white p-4 rounded-lg shadow-sm border border-gray-100 hover:shadow-md transition-shadow cursor-pointer" 
-         data-id="${wiki.slug}">
-      <h3 class="text-lg font-semibold text-gray-900">${sanitizeHTML(wiki.title)}</h3>
-      <div class="mt-2 text-sm text-gray-600">${getExcerpt(wiki.content)}</div>
-      <div class="mt-3 text-xs text-gray-400">
-        ${formatDate(wiki.created_at)}
-      </div>
-    </div>
-  `).join('');
-
-  // Agregar event listeners a los nuevos elementos
-  document.querySelectorAll('.wiki-card').forEach(card => {
-    card.addEventListener('click', () => {
-      const slug = card.dataset.slug;
-      window.location.hash = `#/${slug}`;
-    });
-  });
-}
-
-// Cargar contenido de wiki
-async function loadWikiContent(wikiId) {
-  try {
-    const { data: wiki, error } = await supabase
-      .from('wikis')
-      .select('*')
-      .eq('id', wikiId)
-      .single();
-
-    if (error) throw error;
-
-    document.getElementById('wiki-title').textContent = wiki.title;
-    document.getElementById('wiki-date').textContent = formatDate(wiki.created_at);
-    document.getElementById('wiki-author').textContent = currentUser.username;
-    document.getElementById('wiki-content').innerHTML = renderWikiContent(wiki.content);
-    
-  } catch (error) {
-    console.error('Error loading wiki:', error);
-    document.getElementById('wiki-content').innerHTML = `
-      <div class="text-red-500">Error cargando el contenido: ${error.message}</div>
-    `;
-  }
-}
-
-// Funciones del editor
-function updatePreview() {
-  elements.editorPreview.innerHTML = renderWikiContent(elements.editorContent.value);
-}
-
-function generateSlug(title) {
-  return title
-    .toLowerCase()
-    .replace(/[^a-z0-9]+/g, '-')
-    .replace(/(^-|-$)/g, '');
-}
-
-function applyFormat(format) {
-  const textarea = elements.editorContent;
-  const start = textarea.selectionStart;
-  const end = textarea.selectionEnd;
-  const selectedText = textarea.value.substring(start, end);
-  
-  const formats = {
-    h1: `# ${selectedText}`,
-    h2: `## ${selectedText}`,
-    h3: `### ${selectedText}`,
-    bold: `**${selectedText}**`,
-    italic: `*${selectedText}*`,
-    'list-ul': `- ${selectedText.split('\n').join('\n- ')}`,
-    'list-ol': selectedText.split('\n').map((l, i) => `${i+1}. ${l}`).join('\n'),
-    link: `[${selectedText}](url)`,
-    image: `![${selectedText}](url)`,
-    code: `\`\`\`\n${selectedText}\n\`\`\``,
-    table: `| Header 1 | Header 2 |\n|----------|----------|\n| Cell 1   | Cell 2   |`,
-    wikilink: `[[${selectedText}]]`
-  };
-
-  if (formats[format]) {
-    textarea.value = textarea.value.slice(0, start) + formats[format] + textarea.value.slice(end);
-    textarea.focus();
-    textarea.selectionStart = start + formats[format].length;
-    textarea.selectionEnd = start + formats[format].length;
-    updatePreview();
-  }
-}
-
-// Funciones auxiliares
-function sanitizeHTML(text) {
-    if (!text) return ''; // Manejar valores nulos/undefined
-    return String(text).replace(/</g, '&lt;').replace(/>/g, '&gt;');
-}
-
-function getExcerpt(content, length = 100) {
-  if (!content) return '';
-  const plainText = content
-    .replace(/#+\s*/g, '') // Eliminar encabezados
-    .replace(/!?\[.*?\]\(.*?\)/g, '') // Eliminar imágenes y enlaces
-    .replace(/<\/?[^>]+(>|$)/g, '') // Eliminar HTML
-    .substring(0, length);
-  
-  return plainText.length >= length ? plainText + '...' : plainText;
-}
-
-function formatDate(dateString) {
-  const date = new Date(dateString);
-  const options = { 
-    year: 'numeric', 
-    month: '2-digit', 
-    day: '2-digit',
-    hour: '2-digit',
-    minute: '2-digit'
-  };
-  return date.toLocaleDateString('es-ES', options);
-}
-
-function processImages(html) {
-  return html.replace(/src="(.*?)"/g, (match, url) => {
-    const corsProxy = 'https://corsproxy.io/?';
-    return `src="${corsProxy}${encodeURIComponent(url)}" loading="lazy"`;
-  });
-}
-
-// Manejar búsqueda
-function handleSearch(e) {
-  const term = e.target.value.toLowerCase();
-  const filtered = wikiList.filter(w => 
-    w.title.toLowerCase().includes(term) || 
-    w.content.toLowerCase().includes(term)
-  );
-  renderWikiList(filtered);
-}
-
-// Manejar navegación desde editor
-function handleBackFromEditor() {
-  currentWikiId ? showWikiPage(currentWikiId) : showHomePage();
-}
-
-// Función para renderizar el contenido wiki con sintaxis personalizada
-function renderWikiContent(content) {
-  // Procesar enlaces wiki [[Título]]
-  const withWikiLinks = content.replace(
-    /\[\[([^\]]+)\]\]/g, 
-    '<a href="#" class="wikilink" data-title="$1">$1</a>'
-  );
-
-  // Convertir markdown a HTML
-  const htmlContent = marked.parse(withWikiLinks);
-  const withProxy = processImages(htmlContent);
-
-  // Sanitizar el HTML
-  const cleanHTML = DOMPurify.sanitize(htmlContent, {
-    ALLOWED_TAGS: [
-      'h1', 'h2', 'h3', 'h4', 'h5', 'h6',
-      'p', 'br', 'em', 'strong', 'hr',
-      'ul', 'ol', 'li', 'a', 'img',
-      'blockquote', 'pre', 'code',
-      'table', 'thead', 'tbody', 'tr', 'th', 'td'
-    ],
-    ALLOWED_ATTR: ['href', 'src', 'alt', 'class', 'data-title']
-  });
-
-  return cleanHTML;
-}
-
-// Ejecuta esto en la consola de desarrollo temporalmente
-async function deleteAmongUsPost() {
-  const { error } = await supabase
-    .from('wikis')
-    .delete()
-    .eq('title', 'Among Us'); // Ajusta el filtro según tu caso
-
-  if (!error) console.log('Post de Among Us eliminado');
-}
-
-deleteAmongUsPost();
-  </script>
+
+    <script>
+        // Espera a que el DOM esté completamente cargado y parseado
+        document.addEventListener('DOMContentLoaded', () => {
+
+            // --- Selección de Elementos DOM (Cache para rendimiento) ---
+            const sidebar = document.getElementById('sidebar');
+            const sidebarOverlay = document.getElementById('sidebar-overlay');
+            const menuButton = document.getElementById('menu-button');
+            const closeSidebarButton = document.getElementById('close-sidebar');
+            const themeToggleButton = document.getElementById('theme-toggle');
+            const themeToggleText = themeToggleButton ? themeToggleButton.querySelector('.toggle-text') : null;
+            const chatMessages = document.getElementById('chat-messages');
+            const chatForm = document.getElementById('chat-form');
+            const messageInput = document.getElementById('message-input');
+            const sendButton = document.getElementById('send-button');
+            const loginScreen = document.getElementById('login-screen');
+            const loginEmailInput = document.getElementById('login-email');
+            const loginPasswordInput = document.getElementById('login-password');
+            const loginButton = document.getElementById('login-button');
+            const signupButton = document.getElementById('signup-button');
+            const discordLoginButton = document.getElementById('discord-login-btn');
+            const twitterLoginButton = document.getElementById('twitter-login-btn'); // Nuevo botón Twitter
+            const authMessage = document.getElementById('auth-message');
+            const authError = document.getElementById('auth-error');
+            const profileSection = document.getElementById('profile-section');
+            const profilePic = document.getElementById('profile-pic');
+            const profileIconDefault = document.getElementById('profile-icon-default');
+            const profileName = document.getElementById('profile-name');
+            const profileDropdown = document.getElementById('profile-dropdown');
+            const logoutButtonDropdown = document.getElementById('logout-button-dropdown');
+            const loadingIndicator = document.getElementById('loading-indicator');
+
+            // --- Estado de la Aplicación ---
+            let currentUser = null; // Almacena la sesión del usuario actual
+            let messageHistory = []; // Almacena el historial de mensajes para la API
+            let isProfileDropdownOpen = false; // Controla la visibilidad del dropdown de perfil
+
+            // --- Funciones UI Básicas ---
+            function toggleSidebar() {
+                if(sidebar && sidebarOverlay){
+                    sidebar.classList.toggle('-translate-x-full');
+                    sidebarOverlay.classList.toggle('hidden');
+                 }
+            }
+
+            function updateThemeToggleButton(currentTheme) {
+                if(themeToggleText) {
+                     themeToggleText.textContent = currentTheme === 'dark' ? 'Modo Claro' : 'Modo Oscuro';
+                 }
+                 // Actualiza los iconos Sun/Moon (ya controlados por clases dark:hidden/dark:inline-block)
+            }
+
+            function toggleTheme() {
+                 const htmlElement = document.documentElement;
+                 htmlElement.classList.toggle('dark');
+                 let newTheme = htmlElement.classList.contains('dark') ? 'dark' : 'light';
+                 try { localStorage.theme = newTheme; } catch (e) { console.warn("Could not save theme preference:", e); }
+                 updateThemeToggleButton(newTheme);
+            }
+
+            // --- Función addMessage (con formato código mejorado y copia) ---
+             function addMessage(message, sender = 'user') {
+                 try {
+                     if (!chatMessages || typeof message !== 'string' || message.trim() === '') return;
+
+                     const messageContainer = document.createElement('div');
+                     messageContainer.classList.add('flex', sender === 'user' ? 'justify-end' : 'justify-start', `message-${sender}`);
+
+                     const bubble = document.createElement('div');
+                     bubble.classList.add('rounded-lg', 'py-2', 'px-3', 'max-w-xs', 'sm:max-w-sm', 'md:max-w-md', 'lg:max-w-lg', 'text-sm', 'shadow-sm'); // Tamaños responsivos
+                     // Clases de color aplicadas por CSS global (.message-user > div, .message-ai > div)
+
+                      // Manejo de Errores de la IA visualmente
+                      if (sender === 'ai' && message.toLowerCase().startsWith("error:")) {
+                           bubble.classList.add('border', 'border-red-500', 'dark:border-red-400');
+                      }
+
+                      // Regex para encontrar bloques de código ```lenguaje\n...\n```
+                      const codeBlockRegex = /```(\w*\s*)?\n([\s\S]*?)\n```/g;
+                      let lastIndex = 0;
+                      let fragment = document.createDocumentFragment(); // Usar fragment para mejor rendimiento al añadir múltiples partes
+
+                      // Función segura para escapar HTML
+                      const escapeHtml = (unsafe) => unsafe.replace(/</g, "&lt;").replace(/>/g, "&gt;");
+
+                      // Procesar el mensaje buscando bloques de código
+                      message.split(codeBlockRegex).forEach((part, index) => {
+                          if (index % 3 === 0) { // Es texto normal (fuera de ```)
+                              if (part.trim()) {
+                                  const p = document.createElement('p');
+                                  p.textContent = part; // Usar textContent es más seguro que innerHTML
+                                  p.classList.add('my-1', 'whitespace-pre-wrap', 'break-words');
+                                  fragment.appendChild(p);
+                              }
+                          } else if (index % 3 === 2) { // Es el contenido del bloque de código
+                              const language = message.split(codeBlockRegex)[index - 1]?.trim() || 'text'; // El lenguaje es la parte anterior
+                              const code = part; // No hacer trim() aquí para preservar indentación
+
+                              const codeContainer = document.createElement('div');
+                              codeContainer.classList.add('code-block-container');
+
+                              // Plantilla HTML para el bloque de código (más mantenible)
+                              codeContainer.innerHTML = `
+                                  <div class="flex justify-between items-center mb-1">
+                                      <button class="code-toggle-button" aria-expanded="false">
+                                          <span class="toggle-text">Ver Código (${escapeHtml(language)})</span>
+                                          <i data-lucide="chevron-down" class="icon-down w-4 h-4 ml-1 shrink-0"></i>
+                                          <i data-lucide="chevron-up" class="icon-up w-4 h-4 ml-1 hidden shrink-0"></i>
+                                      </button>
+                                      <button class="copy-code-button p-1 text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-gray-100" aria-label="Copiar código">
+                                          <i data-lucide="copy" class="w-4 h-4"></i>
+                                      </button>
+                                  </div>
+                                  <pre class="code-content"><code class="language-${escapeHtml(language)}">${escapeHtml(code)}</code></pre>
+                              `;
+                              fragment.appendChild(codeContainer);
+                          }
+                          // La parte index % 3 === 1 es el lenguaje, ya capturado arriba.
+                      });
+
+                      // Si después de procesar, el fragmento está vacío pero el mensaje original no, añadir el mensaje tal cual
+                      if (!fragment.hasChildNodes() && message.trim()) {
+                          bubble.textContent = message;
+                          bubble.classList.add('whitespace-pre-wrap', 'break-words');
+                      } else {
+                          bubble.appendChild(fragment); // Añadir el contenido procesado
+                      }
+
+                      messageContainer.appendChild(bubble);
+                      chatMessages.appendChild(messageContainer);
+
+                      // Crear iconos Lucide para los elementos recién añadidos
+                      if (typeof lucide !== 'undefined' && lucide.createIcons) {
+                           lucide.createIcons({ nodes: [messageContainer] });
+                      } else {
+                           console.warn("Lucide not ready for dynamic icons in addMessage");
+                      }
+
+                      // Scroll suave al final
+                      chatMessages.scrollTo({ top: chatMessages.scrollHeight, behavior: 'smooth' });
+
+                      // Añadir al historial para la API (solo mensajes de usuario y respuestas válidas de IA)
+                      if (sender === 'user' || (sender === 'ai' && !message.toLowerCase().startsWith("error:"))) {
+                           messageHistory.push({ role: sender === 'user' ? 'user' : 'assistant', content: message });
+                           // Limitar historial si crece mucho (opcional, ya se hace antes de enviar)
+                           // if (messageHistory.length > 20) messageHistory.shift();
+                      }
+
+                 } catch (error) {
+                     console.error("Error in addMessage:", error);
+                     try { // Intenta mostrar un error mínimo en la UI
+                         const errDiv = document.createElement('div');
+                         errDiv.textContent = `[Error al mostrar mensaje]`;
+                         errDiv.classList.add('text-red-500','text-xs', 'text-center', 'w-full');
+                         chatMessages.appendChild(errDiv);
+                     } catch {} // Evita errores infinitos si falla el fallback
+                 }
+            }
+
+
+            // --- Funciones de Autenticación (Supabase) ---
+            function clearAuthMessages() {
+                 if(authError) { authError.textContent = ''; } // Más simple que añadir/quitar clases
+                 if(authMessage) { authMessage.textContent = ''; }
+            }
+
+            function displayAuthError(message) {
+                console.error("Auth Error:", message);
+                if (authError) { authError.textContent = message; }
+                if (authMessage) { authMessage.textContent = ''; } // Limpia mensaje de info si hay error
+            }
+
+            function displayAuthInfo(message) {
+                if (authMessage) { authMessage.textContent = message; }
+                if (authError) { authError.textContent = ''; } // Limpia mensaje de error si hay info
+            }
+
+            async function handleLogin() {
+                 clearAuthMessages();
+                 const email = loginEmailInput?.value.trim();
+                 const password = loginPasswordInput?.value;
+
+                 if (!email || !password) { return displayAuthError("Ingresa correo y contraseña."); }
+                 if (!supabaseClient?.auth?.signInWithPassword) { return displayAuthError("Error interno: Cliente Supabase no inicializado."); }
+
+                 try {
+                     displayAuthInfo("Iniciando sesión...");
+                     const { error } = await supabaseClient.auth.signInWithPassword({ email, password });
+                     if (error) throw error;
+                     // No muestra mensaje de éxito aquí, el onAuthStateChange lo hará indirectamente al ocultar el login
+                 } catch (err) {
+                     const message = err.message === 'Invalid login credentials' ? 'Credenciales inválidas.' : `Error: ${err.message}`;
+                     displayAuthError(message);
+                 }
+            }
+
+            async function handleSignUp() {
+                 clearAuthMessages();
+                 const email = loginEmailInput?.value.trim();
+                 const password = loginPasswordInput?.value;
+
+                 if (!email || !password) { return displayAuthError("Ingresa correo y contraseña."); }
+                 if (password.length < 6) { return displayAuthError("La contraseña debe tener al menos 6 caracteres."); }
+                 if (!supabaseClient?.auth?.signUp) { return displayAuthError("Error interno: Cliente Supabase no inicializado."); }
+
+                 try {
+                     displayAuthInfo("Registrando usuario...");
+                     const { data, error } = await supabaseClient.auth.signUp({ email, password });
+                     if (error) throw error;
+
+                     console.log("Sign up successful:", data.user?.email);
+                     if (data.user && !data.user.email_confirmed_at && data.session === null) { // Verifica si requiere confirmación
+                         displayAuthInfo("¡Registro exitoso! Revisa tu correo para confirmar la cuenta.");
+                     } else if (data.user) { // Si no requiere confirmación o ya estaba confirmado
+                         displayAuthInfo("¡Registro exitoso!"); // El onAuthStateChange ocultará el login
+                     } else {
+                         displayAuthInfo("Proceso de registro completado.");
+                     }
+                 } catch (err) {
+                     let displayMessage = `Error de registro: ${err.message}`;
+                     if (err.message?.includes("User already registered")) { displayMessage = "Este correo ya está registrado."; }
+                     else if (err.message?.includes("Password should be")) { displayMessage = "Contraseña débil o inválida."; }
+                     displayAuthError(displayMessage);
+                 }
+            }
+
+            async function handleOAuthLogin(provider) {
+                clearAuthMessages();
+                if (!supabaseClient?.auth?.signInWithOAuth) {
+                    return displayAuthError("Error interno: Cliente Supabase no configurado para OAuth.");
+                }
+                try {
+                    displayAuthInfo(`Redirigiendo a ${provider}...`);
+                    // La redirección ocurre aquí. Si hay un error *antes* de redirigir, se captura abajo.
+                    // Si la redirección es exitosa, el navegador abandona esta página.
+                    const { error } = await supabaseClient.auth.signInWithOAuth({ provider: provider });
+                    if (error) throw error;
+                } catch (err) {
+                    console.error(`Error Login ${provider}:`, err);
+                    displayAuthError(`Error con ${provider}: ${err.message}`);
+                    // Limpia el mensaje de redirección si falló
+                    if (authMessage) authMessage.textContent = '';
+                }
+            }
+            // Funciones específicas para cada proveedor OAuth
+            async function handleDiscordLogin() { handleOAuthLogin('discord'); }
+            async function handleTwitterLogin() { handleOAuthLogin('twitter'); }
+
+
+            async function handleLogout() {
+                 if (!supabaseClient?.auth?.signOut) {
+                     console.warn("Simulated logout (Supabase client invalid).");
+                     currentUser = null;
+                     showLoginScreen(); // Muestra pantalla de login manualmente
+                     return;
+                 }
+                 try {
+                     console.log("Attempting logout...");
+                     const { error } = await supabaseClient.auth.signOut();
+                     if (error) throw error;
+                     console.log("Logout successful.");
+                     currentUser = null; // Limpia usuario localmente
+                     // El listener onAuthStateChange se encargará de llamar a showLoginScreen
+                     if (profileDropdown) profileDropdown.classList.remove('visible'); // Cierra dropdown
+                     isProfileDropdownOpen = false;
+                 } catch (err) {
+                     console.error("Error Logout:", err);
+                     alert(`Fallo al cerrar sesión: ${err.message}`); // Notifica al usuario
+                 }
+            }
+
+            // --- Funciones UI (Control Login Screen, Actualización Perfil) ---
+            function showLoginScreen() {
+                if (!loginScreen || !messageInput || !sendButton || !profileSection || !chatMessages) return;
+                loginScreen.classList.remove('opacity-0');
+                loginScreen.classList.add('opacity-100', 'visible'); // Asegura visibilidad
+                messageInput.disabled = true;
+                sendButton.disabled = true;
+                profileSection.classList.add('hidden');
+                if(profileDropdown) profileDropdown.classList.remove('visible'); // Oculta dropdown si estaba abierto
+                isProfileDropdownOpen = false;
+                chatMessages.innerHTML = ''; // Limpia mensajes anteriores
+                messageHistory = []; // Limpia historial
+                addMessage("Por favor, inicia sesión o regístrate para comenzar.", 'ai');
+                if (loginEmailInput) loginEmailInput.value = ''; // Limpia campos
+                if (loginPasswordInput) loginPasswordInput.value = '';
+                clearAuthMessages(); // Limpia mensajes de error/info previos
+            }
+
+            function hideLoginScreen(user) {
+                if (!loginScreen || !messageInput || !sendButton || !profileSection || !profileName || !profilePic || !profileIconDefault || !chatMessages) return;
+                loginScreen.classList.add('opacity-0');
+                loginScreen.classList.remove('visible'); // Asegura ocultación completa
+                messageInput.disabled = false;
+                sendButton.disabled = messageInput.value.trim() === ''; // Habilita botón si hay texto
+                profileSection.classList.remove('hidden');
+
+                // Actualiza info de perfil
+                const userName = user.user_metadata?.full_name || user.user_metadata?.user_name || user.email || user.id; // Mejor fallback para nombre
+                const avatarUrl = user.user_metadata?.avatar_url;
+                profileName.textContent = userName;
+                if (avatarUrl) {
+                    profilePic.src = avatarUrl;
+                    profilePic.classList.remove('hidden');
+                    profileIconDefault.classList.add('hidden');
+                } else {
+                    profilePic.classList.add('hidden');
+                    profilePic.src = '#'; // Limpia src anterior
+                    profileIconDefault.classList.remove('hidden');
+                }
+
+                currentUser = user; // Guarda el usuario actual
+                if (!document.hidden) { // Solo enfoca si la pestaña está activa
+                   messageInput.focus();
+                }
+                chatMessages.innerHTML = ''; // Limpia mensajes (ej. "inicia sesión...")
+                messageHistory = []; // Resetea historial al loguear
+                addMessage(`¡Hola ${userName}! ¿En qué puedo ayudarte hoy?`, 'ai');
+
+                if(profileDropdown) profileDropdown.classList.remove('visible'); // Asegura dropdown cerrado
+                isProfileDropdownOpen = false;
+                const chevron = profileSection.querySelector('.profile-chevron');
+                if (chevron) { // Asegura que el chevron esté hacia abajo (icono 'up' cuando el perfil está visible)
+                    chevron.setAttribute('data-lucide', 'chevron-up');
+                     if(typeof lucide!=='undefined') lucide.createIcons({nodes:[chevron.parentElement]});
+                }
+            }
+
+            // --- Función Principal de Envío de Mensaje (OpenRouter API) ---
+            async function handleSendMessage(event) {
+                 event.preventDefault(); // Evita recarga de página por el form
+                 const userMessage = messageInput?.value.trim();
+                 if (!userMessage || !currentUser || !loadingIndicator || !messageInput || !sendButton) return; // Verifica todos los elementos necesarios
+
+                 addMessage(userMessage, 'user');
+                 messageInput.value = ''; // Limpia input
+                 sendButton.disabled = true; // Deshabilita botón mientras responde
+                 loadingIndicator.classList.remove('hidden'); // Muestra "pensando..."
+
+                 try {
+                     // Limitar el historial enviado a la API (ej. últimos 10 mensajes = 5 pares user/assistant)
+                     const limitedHistory = messageHistory.slice(-10);
+
+                     const response = await fetch("[https://openrouter.ai/api/v1/chat/completions](https://openrouter.ai/api/v1/chat/completions)", {
+                         method: "POST",
+                         headers: {
+                             "Authorization": `Bearer ${OPENROUTER_API_KEY}`,
+                             "Content-Type": "application/json",
+                             "HTTP-Referer": YOUR_SITE_URL, // Requerido por algunos modelos/OpenRouter
+                             "X-Title": YOUR_SITE_NAME     // Opcional, útil para identificar tu app
+                         },
+                         body: JSON.stringify({
+                             model: OPENROUTER_MODEL,
+                             messages: limitedHistory // Envía historial limitado
+                         })
+                     });
+
+                     if (!response.ok) {
+                         // Intenta obtener detalles del error de la API
+                         let errorDetails = `Error API ${response.status}: ${response.statusText}`;
+                         try {
+                             const errorData = await response.json();
+                             errorDetails += ` - ${errorData.error?.message || JSON.stringify(errorData.error) || 'No additional details.'}`;
+                         } catch (e) {
+                             try { // Si la respuesta no es JSON
+                                 const textError = await response.text();
+                                 errorDetails += ` - ${textError}`;
+                             } catch (textE) { /* Ignora si no se puede leer el texto */ }
+                         }
+                         throw new Error(errorDetails);
+                     }
+
+                     const data = await response.json();
+                     const aiResponse = data.choices?.[0]?.message?.content?.trim();
+
+                     if (aiResponse) {
+                         addMessage(aiResponse, 'ai');
+                     } else {
+                         // Si la respuesta es 200 OK pero no tiene el contenido esperado
+                         console.error("Invalid response structure from OpenRouter:", data);
+                         addMessage("Error: Recibí una respuesta inesperada del servidor de IA.", 'ai');
+                     }
+                 } catch (error) {
+                     console.error("Error fetching OpenRouter:", error);
+                     addMessage(`Error: ${error.message || 'No se pudo conectar con el servicio de IA.'}`, 'ai');
+                 } finally {
+                     // Siempre oculta el indicador y re-habilita el input/botón si el usuario sigue logueado
+                     loadingIndicator.classList.add('hidden');
+                     if (currentUser && messageInput && sendButton) {
+                         messageInput.disabled = false; // Re-habilita input
+                         sendButton.disabled = messageInput.value.trim() === ''; // Habilita botón si input no está vacío
+                         if (!document.hidden) { // Solo enfoca si la pestaña está activa
+                             messageInput.focus();
+                         }
+                     } else if (sendButton) {
+                         sendButton.disabled = true; // Mantiene deshabilitado si no hay usuario
+                     }
+                 }
+            }
+
+
+            // --- Añadir Event Listeners (con comprobaciones de existencia) ---
+            if (menuButton) menuButton.addEventListener('click', toggleSidebar);
+            if (closeSidebarButton) closeSidebarButton.addEventListener('click', toggleSidebar);
+            if (sidebarOverlay) sidebarOverlay.addEventListener('click', toggleSidebar);
+            if (themeToggleButton) themeToggleButton.addEventListener('click', toggleTheme);
+            if (chatForm) chatForm.addEventListener('submit', handleSendMessage);
+            if (loginButton) loginButton.addEventListener('click', handleLogin);
+            if (signupButton) signupButton.addEventListener('click', handleSignUp);
+            if (discordLoginButton) discordLoginButton.addEventListener('click', handleDiscordLogin);
+            if (twitterLoginButton) twitterLoginButton.addEventListener('click', handleTwitterLogin); // Listener para Twitter
+            if (logoutButtonDropdown) logoutButtonDropdown.addEventListener('click', handleLogout);
+
+            // Listener para habilitar/deshabilitar botón de envío según el input
+            if (messageInput && sendButton) {
+                 messageInput.addEventListener('input', () => {
+                     if (currentUser) { // Solo habilita si hay usuario
+                         sendButton.disabled = messageInput.value.trim() === '';
+                     } else {
+                         sendButton.disabled = true;
+                     }
+                 });
+                 // Permitir enviar con Enter (si no está ya manejado por el submit del form)
+                 messageInput.addEventListener('keypress', (e) => {
+                     if (e.key === 'Enter' && !e.shiftKey) { // Evitar envío con Shift+Enter
+                         e.preventDefault(); // Prevenir nueva línea
+                         if (!sendButton.disabled) { // Solo si el botón está habilitado
+                             chatForm.requestSubmit(); // Simula click en submit
+                         }
+                     }
+                 });
+            }
+
+            // Listener para Toggle Dropdown Perfil
+            if (profileSection && profileDropdown) {
+                 profileSection.addEventListener('click', (e) => {
+                      e.stopPropagation(); // Evita que el click cierre inmediatamente el dropdown
+                      isProfileDropdownOpen = !isProfileDropdownOpen;
+                      profileDropdown.classList.toggle('visible', isProfileDropdownOpen);
+                      const chevron = profileSection.querySelector('.profile-chevron');
+                      if (chevron) {
+                          // El icono 'up' significa que el perfil está visible, 'down' cuando el dropdown está abierto
+                          chevron.setAttribute('data-lucide', isProfileDropdownOpen ? 'chevron-down' : 'chevron-up');
+                          if(typeof lucide !=='undefined') lucide.createIcons({ nodes: [chevron.parentElement] });
+                      }
+                 });
+            }
+
+            // Listeners Delegados en chatMessages (para Copiar y Toggle Código)
+             if (chatMessages) {
+                 chatMessages.addEventListener('click', (event) => {
+                     // Botón Copiar Código
+                     const copyButton = event.target.closest('.copy-code-button');
+                     if (copyButton) {
+                         const container = copyButton.closest('.code-block-container');
+                         const codeElement = container?.querySelector('pre code');
+                         if (codeElement?.textContent && navigator.clipboard) {
+                             navigator.clipboard.writeText(codeElement.textContent).then(() => {
+                                 const icon = copyButton.querySelector('i');
+                                 if(icon && typeof lucide !=='undefined') {
+                                     icon.setAttribute('data-lucide', 'check'); // Cambia a Check
+                                     lucide.createIcons({ nodes: [copyButton] }); // Regenera icono en el botón
+                                     copyButton.disabled = true; // Deshabilita temporalmente
+                                     setTimeout(() => {
+                                         icon.setAttribute('data-lucide', 'copy'); // Vuelve a Copy
+                                         lucide.createIcons({ nodes: [copyButton] });
+                                         copyButton.disabled = false; // Rehabilita
+                                     }, 1500); // Durante 1.5 segundos
+                                 }
+                             }).catch(err => {
+                                 console.error('Failed to copy code: ', err);
+                                 // Podrías mostrar un mensaje de error temporal aquí
+                             });
+                         }
+                         return; // Evita que se active el toggle de código si se clickea en copiar
+                     }
+
+                     // Botón Toggle Código (Mostrar/Ocultar)
+                     const toggleButton = event.target.closest('.code-toggle-button');
+                     if (toggleButton) {
+                         const container = toggleButton.closest('.code-block-container');
+                         const codeContent = container?.querySelector('.code-content');
+                         const textElement = toggleButton.querySelector('.toggle-text');
+                         const iconDown = toggleButton.querySelector('.icon-down');
+                         const iconUp = toggleButton.querySelector('.icon-up');
+                         const langMatch = textElement?.textContent.match(/\(([^)]+)\)/); // Extrae lenguaje del texto
+                         const language = langMatch ? langMatch[1] : 'código';
+
+
+                         if (!codeContent || !textElement || !iconDown || !iconUp) return;
+
+                         const isVisible = codeContent.classList.toggle('visible');
+                         toggleButton.setAttribute('aria-expanded', isVisible);
+                         textElement.textContent = isVisible ? `Ocultar Código (${language})` : `Ver Código (${language})`;
+                         iconDown.classList.toggle('hidden', isVisible);
+                         iconUp.classList.toggle('hidden', !isVisible);
+                     }
+                 });
+             }
+
+            // Listener Global para Cerrar Dropdown Perfil al hacer clic fuera
+             document.addEventListener('click', (event) => {
+                 if (isProfileDropdownOpen && profileDropdown && profileSection) {
+                      // Si el click NO está dentro del dropdown NI dentro del botón que lo abre
+                      if (!profileDropdown.contains(event.target) && !profileSection.contains(event.target)) {
+                           profileDropdown.classList.remove('visible');
+                           isProfileDropdownOpen = false;
+                           const chevron = profileSection.querySelector('.profile-chevron');
+                           if (chevron) { // Asegura que el icono vuelva a 'up'
+                               chevron.setAttribute('data-lucide', 'chevron-up');
+                                if(typeof lucide!=='undefined') lucide.createIcons({nodes:[chevron.parentElement]});
+                           }
+                      }
+                 }
+             });
+
+            // --- Configuración Inicial Final (Iconos, Tema) ---
+            try {
+                if (typeof lucide !== 'undefined' && typeof lucide.createIcons === 'function') {
+                    lucide.createIcons(); // Crea todos los iconos iniciales
+                    console.log("Lucide Initialized OK");
+                } else {
+                    console.warn("Lucide not ready for initial createIcons call.");
+                }
+            } catch (e) { console.error("Lucide Initial Init Error:", e); }
+
+            // Actualiza el texto del botón de tema basado en el tema aplicado inicialmente
+            const currentTheme = document.documentElement.classList.contains('dark') ? 'dark' : 'light';
+            updateThemeToggleButton(currentTheme);
+
+            // --- Listener de Estado de Autenticación Supabase (Este es tu "Callback") ---
+            // Se ejecuta al cargar la página y cada vez que cambia el estado de autenticación.
+            // Crucial para manejar el regreso desde un proveedor OAuth.
+             if (supabaseClient && typeof supabaseClient.auth?.onAuthStateChange === 'function') {
+                 supabaseClient.auth.onAuthStateChange((event, session) => {
+                     // 'event' puede ser SIGNED_IN, SIGNED_OUT, INITIAL_SESSION, TOKEN_REFRESHED, USER_UPDATED, PASSWORD_RECOVERY
+                     // 'session' contiene la información del usuario si está logueado, o es null si no.
+                     console.log("Auth State Change Event:", event, session ? `Session for ${session.user.id}` : "No session");
+                     const user = session?.user;
+                     currentUser = user; // Actualiza el estado global del usuario
+
+                     if (user) {
+                         // Si hay usuario (puede ser por login normal, registro, o regreso de OAuth)
+                         hideLoginScreen(user); // Oculta login, muestra chat, actualiza perfil
+                     } else {
+                         // Si no hay usuario (logout, sesión expirada, estado inicial sin sesión)
+                         showLoginScreen(); // Muestra pantalla de login
+                     }
+                 });
+                 console.log("Supabase Auth Listener Added OK (Handles Auth Callbacks)");
+             } else {
+                 // Si el cliente Supabase falló al inicializarse o es el dummy
+                 console.warn("Auth Listener NOT Added (Supabase client invalid or dummy). Forcing Login Screen.");
+                 showLoginScreen(); // Muestra el login como fallback
+             }
+
+        }); // Fin DOMContentLoaded
+    </script>
 </body>
 </html>
